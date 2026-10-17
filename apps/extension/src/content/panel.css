@@ -1,0 +1,151 @@
+#degiroid-root {
+  all: initial;
+  position: fixed;
+  z-index: 2147483646;
+  right: 16px;
+  bottom: 16px;
+  font-family: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  color: #e8f5ef;
+  pointer-events: none;
+}
+
+#degiroid-root * {
+  box-sizing: border-box;
+}
+
+#degiroid-panel {
+  pointer-events: auto;
+  width: min(320px, calc(100vw - 32px));
+  background: linear-gradient(160deg, #0b2e24 0%, #123d31 55%, #0a241c 100%);
+  border: 1px solid rgba(120, 210, 170, 0.35);
+  border-radius: 14px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+  padding: 14px 16px 12px;
+  backdrop-filter: blur(8px);
+}
+
+#degiroid-panel[data-collapsed="true"] {
+  width: auto;
+  padding: 10px 12px;
+}
+
+#degiroid-panel header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+#degiroid-panel h1 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #9fe6c5;
+}
+
+#degiroid-panel button {
+  all: unset;
+  cursor: pointer;
+  font-size: 11px;
+  color: #c7ebe0;
+  border: 1px solid rgba(159, 230, 197, 0.35);
+  border-radius: 999px;
+  padding: 4px 10px;
+}
+
+#degiroid-panel button:hover {
+  background: rgba(159, 230, 197, 0.12);
+}
+
+#degiroid-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  margin-bottom: 10px;
+  color: #d5eee4;
+}
+
+#degiroid-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #f0b429;
+  box-shadow: 0 0 0 3px rgba(240, 180, 41, 0.2);
+}
+
+#degiroid-status-dot[data-state="connected"] {
+  background: #3dd68c;
+  box-shadow: 0 0 0 3px rgba(61, 214, 140, 0.25);
+}
+
+#degiroid-status-dot[data-state="error"] {
+  background: #ff6b6b;
+  box-shadow: 0 0 0 3px rgba(255, 107, 107, 0.2);
+}
+
+#degiroid-metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+#degiroid-metrics article {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+
+#degiroid-metrics span {
+  display: block;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #8fbfad;
+  margin-bottom: 4px;
+}
+
+#degiroid-metrics strong {
+  font-size: 14px;
+  font-weight: 650;
+  color: #f3fff9;
+}
+
+#degiroid-positions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 160px;
+  overflow: auto;
+}
+
+#degiroid-positions li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  padding: 6px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+#degiroid-positions li:first-child {
+  border-top: none;
+}
+
+#degiroid-error,
+#degiroid-empty {
+  font-size: 12px;
+  line-height: 1.4;
+  color: #c7ebe0;
+  margin: 0;
+}
+
+#degiroid-panel footer {
+  margin-top: 10px;
+  font-size: 10px;
+  color: #7aa893;
+}

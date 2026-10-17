@@ -1,0 +1,144 @@
+:root {
+  color-scheme: dark;
+  --bg: #071912;
+  --panel: #0f2d24;
+  --line: rgba(159, 230, 197, 0.22);
+  --text: #e9f7f0;
+  --muted: #8fbfad;
+  --accent: #3dd68c;
+  --warn: #f0b429;
+  --danger: #ff6b6b;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  background:
+    radial-gradient(circle at top right, rgba(61, 214, 140, 0.18), transparent 45%),
+    linear-gradient(180deg, #0b241c, var(--bg));
+  color: var(--text);
+  font: 13px/1.4 "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+}
+
+main {
+  padding: 14px;
+}
+
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.eyebrow {
+  margin: 0 0 2px;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+h1 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+#badge {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--warn);
+}
+
+#badge[data-state="connected"] {
+  color: var(--accent);
+}
+
+#badge[data-state="error"] {
+  color: var(--danger);
+}
+
+#status {
+  margin: 0;
+  color: var(--muted);
+}
+
+#metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 12px;
+}
+
+#metrics article {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px;
+}
+
+#metrics span {
+  display: block;
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+}
+
+#metrics strong {
+  font-size: 13px;
+}
+
+#positions {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  max-height: 180px;
+  overflow: auto;
+}
+
+#positions li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+footer {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+button {
+  flex: 1;
+  border: 0;
+  border-radius: 10px;
+  padding: 9px 10px;
+  background: var(--accent);
+  color: #062016;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+button.secondary {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--line);
+}
+
+button:hover {
+  filter: brightness(1.05);
+}

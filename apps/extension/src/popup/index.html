@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Degiroid</title>
+    <link rel="stylesheet" href="./popup.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <p class="eyebrow">Degiroid</p>
+          <h1>DEGIRO companion</h1>
+        </div>
+        <span id="badge" data-state="pending">…</span>
+      </header>
+
+      <section id="summary">
+        <p id="status">Checking DEGIRO session…</p>
+      </section>
+
+      <section id="metrics" hidden>
+        <article>
+          <span>Portfolio</span>
+          <strong id="portfolio-value">—</strong>
+        </article>
+        <article>
+          <span>Cash</span>
+          <strong id="cash-value">—</strong>
+        </article>
+        <article>
+          <span>Positions</span>
+          <strong id="position-count">—</strong>
+        </article>
+      </section>
+
+      <ul id="positions"></ul>
+
+      <footer>
+        <button type="button" id="sync-btn">Sync now</button>
+        <button type="button" id="open-trader-btn" class="secondary">
+          Open trader
+        </button>
+      </footer>
+    </main>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
