@@ -1,4 +1,10 @@
-import { formatMoney } from "@/shared/degiro";
+import {
+  deltaTone,
+  formatDelta,
+  formatMoney,
+  formatPrice,
+  sessionStatusLabel,
+} from "@/shared/degiro";
 import type { DegiroSessionSnapshot } from "@/shared/degiro";
 import { isExtensionMessage } from "@/shared/messaging";
 import type { ExtensionMessage, ExtensionResponse } from "@/shared/messaging";
@@ -8,8 +14,8 @@ const status = document.querySelector("#status");
 const metrics = document.querySelector("#metrics");
 const portfolioValue = document.querySelector("#portfolio-value");
 const cashValue = document.querySelector("#cash-value");
-const positionCount = document.querySelector("#position-count");
-const positions = document.querySelector("#positions");
+const orderCount = document.querySelector("#order-count");
+const orders = document.querySelector("#orders");
 const syncBtn = document.querySelector("#sync-btn");
 const openTraderBtn = document.querySelector("#open-trader-btn");
 
@@ -22,18 +28,17 @@ function render(snapshot: DegiroSessionSnapshot): void {
     return;
   }
 
+  status.textContent = sessionStatusLabel(snapshot);
+
   if (snapshot.connected) {
     badge.dataset.state = "connected";
     badge.textContent = "Connected";
-    status.textContent = snapshot.client?.displayName
-      ? `Signed in as ${snapshot.client.displayName}`
-      : "Linked to your DEGIRO trader session";
+  } else if (snapshot.pageKind === "trader") {
+    badge.dataset.state = "pending";
+    badge.textContent = "Syncing";
   } else {
     badge.dataset.state = "error";
     badge.textContent = "Offline";
-    status.textContent =
-      snapshot.error ??
-      "Open https://trader.degiro.nl and log in to connect.";
   }
 
   const currency = snapshot.client?.currency ?? "EUR";
@@ -43,25 +48,39 @@ function render(snapshot: DegiroSessionSnapshot): void {
   if (cashValue) {
     cashValue.textContent = formatMoney(snapshot.cashValue, currency);
   }
-  if (positionCount) {
-    positionCount.textContent = String(snapshot.positions.length);
+  if (orderCount) {
+    orderCount.textContent = String(snapshot.orders.length);
   }
 
   metrics.hidden = !snapshot.connected;
 
-  if (positions) {
-    positions.innerHTML = snapshot.positions
-      .slice(0, 10)
-      .map((position) => {
-        const label =
-          position.productName ??
-          (position.id != null ? `Product ${position.id}` : "Position");
-        return `<li><span>${label}</span><strong>${formatMoney(
-          position.value,
-          currency,
-        )}</strong></li>`;
-      })
-      .join("");
+  if (orders) {
+    if (snapshot.orders.length === 0) {
+      orders.innerHTML = snapshot.connected
+        ? `<li class="empty">No outstanding orders.</li>`
+        : "";
+    } else {
+      orders.innerHTML = snapshot.orders
+        .map((order) => {
+          const label =
+            order.productName ??
+            (order.productId != null
+              ? `Product ${order.productId}`
+              : "Order");
+          const tone = deltaTone(order.side, order.priceDelta);
+          return `<li data-tone="${tone}">
+            <div class="order-main">
+              <span class="order-side">${order.side}</span>
+              <span class="order-name">${label}</span>
+            </div>
+            <div class="order-meta">
+              <span>${formatPrice(order.marketPrice)} → ${formatPrice(order.orderPrice)}</span>
+              <strong>${formatDelta(order.priceDelta, order.priceDeltaPct)}</strong>
+            </div>
+          </li>`;
+        })
+        .join("");
+    }
   }
 }
 
@@ -78,6 +97,7 @@ async function request(
       url: "",
       client: null,
       positions: [],
+      orders: [],
       cashValue: null,
       portfolioValue: null,
       lastSyncedAt: null,
