@@ -32,13 +32,23 @@ export default defineManifest({
   content_scripts: [
     {
       matches: [TRADER_MATCH],
+      js: ["src/content/page-bridge.ts"],
+      run_at: "document_start",
+      world: "MAIN",
+    },
+    {
+      matches: [TRADER_MATCH],
       js: ["src/content/index.ts"],
       css: ["src/content/panel.css"],
       run_at: "document_idle",
     },
   ],
-  host_permissions: [TRADER_MATCH],
-  permissions: ["storage", "tabs", "alarms"],
+  host_permissions: [
+    TRADER_MATCH,
+    // Live last prices for outstanding-order deltas
+    "https://charting.vwdservices.com/*",
+  ],
+  permissions: ["storage", "tabs", "alarms", "cookies"],
   externally_connectable: {
     matches: [TRADER_MATCH],
   },

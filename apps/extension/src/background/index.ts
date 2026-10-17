@@ -100,7 +100,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       case "DEGIROID_SYNC_NOW":
         return { ok: true, snapshot: await askActiveDegiroTabToSync() };
       case "DEGIROID_CONTENT_READY":
-        return { ok: true, snapshot: await askActiveDegiroTabToSync() };
+        // Content script already syncs with the page and pushes SNAPSHOT_UPDATED.
+        // Do not kick off a racing second sync here.
+        return { ok: true, snapshot: await readSnapshot() };
       case "DEGIROID_OPEN_TRADER":
         await chrome.tabs.create({ url: `${DEGIRO_TRADER_ORIGIN}/` });
         return { ok: true, snapshot: await readSnapshot() };

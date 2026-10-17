@@ -64,6 +64,10 @@ h1 {
   color: var(--accent);
 }
 
+#badge[data-state="pending"] {
+  color: var(--warn);
+}
+
 #badge[data-state="error"] {
   color: var(--danger);
 }
@@ -100,20 +104,74 @@ h1 {
   font-size: 13px;
 }
 
-#positions {
+.section-label {
+  margin: 14px 0 0;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+#orders {
   list-style: none;
-  margin: 12px 0 0;
+  margin: 6px 0 0;
   padding: 0;
-  max-height: 180px;
+  max-height: 240px;
   overflow: auto;
 }
 
-#positions li {
+#orders li {
   display: flex;
-  justify-content: space-between;
-  gap: 8px;
+  flex-direction: column;
+  gap: 4px;
   padding: 8px 0;
   border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+#orders li.empty {
+  color: var(--muted);
+  border-top: none;
+}
+
+.order-main,
+.order-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.order-side {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+}
+
+.order-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.order-meta {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.order-meta strong {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+#orders li[data-tone="positive"] .order-meta strong {
+  color: var(--accent);
+}
+
+#orders li[data-tone="negative"] .order-meta strong {
+  color: var(--danger);
 }
 
 footer {

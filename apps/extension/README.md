@@ -6,7 +6,8 @@ Chrome/Edge MV3 extension tightly bound to the DEGIRO web trader at
 ## What it does
 
 - Injects only on `https://trader.degiro.nl/*`
-- Reuses your logged-in trader session (cookies) to read client + portfolio data
+- Waits for the trader page session (fetching via a page-world bridge so cookies apply), then reads client, portfolio, and outstanding orders
+- Shows each outstanding order with the delta between market price and order price
 - Shows a floating panel on the trader SPA
 - Exposes the same snapshot in the toolbar popup
 
@@ -31,7 +32,9 @@ bun run build --filter=extension
 
 | Permission / host | Why |
 | --- | --- |
-| `https://trader.degiro.nl/*` | Only host: inject UI + call trader APIs with your session |
-| `storage` | Cache the latest portfolio snapshot |
+| `https://trader.degiro.nl/*` | Inject UI + call trader APIs with your session |
+| `https://charting.vwdservices.com/*` | Live last prices used for order market deltas |
+| `cookies` | Read `JSESSIONID` as the `sessionId` query param DEGIRO APIs require |
+| `storage` | Cache the latest session snapshot |
 | `tabs` | Find/refresh the active DEGIRO tab |
 | `alarms` | Periodic light sync while the browser is open |
