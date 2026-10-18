@@ -1,6 +1,7 @@
 import {
   deltaTone,
   detectPageKind,
+  formatChangePct,
   formatDelta,
   formatMoney,
   formatPrice,
@@ -89,6 +90,8 @@ function renderSnapshot(snapshot: DegiroSessionSnapshot): void {
 
   const currency = snapshot.client?.currency ?? "EUR";
   const orders = snapshot.orders;
+  const indexLosers = snapshot.indexLosers ?? [];
+
   const orderItems =
     orders.length > 0
       ? orders
@@ -113,6 +116,27 @@ function renderSnapshot(snapshot: DegiroSessionSnapshot): void {
           .join("")
       : `<p id="degiroid-empty">No outstanding orders.</p>`;
 
+  const loserRows =
+    indexLosers.length > 0
+      ? indexLosers
+          .map((row, i) => {
+            const label = row.symbol
+              ? `${row.symbol} · ${row.name}`
+              : row.name;
+            const indexes = row.indexes.join(" · ");
+            return `<tr data-tone="negative">
+              <td class="degiroid-loser-rank">${i + 1}</td>
+              <td class="degiroid-loser-name">
+                <span>${escapeHtml(label)}</span>
+                ${indexes ? `<small>${escapeHtml(indexes)}</small>` : ""}
+              </td>
+              <td class="degiroid-loser-price">${escapeHtml(formatPrice(row.lastPrice))}</td>
+              <td class="degiroid-loser-change">${escapeHtml(formatChangePct(row.changePct))}</td>
+            </tr>`;
+          })
+          .join("")
+      : `<tr><td colspan="4" id="degiroid-empty">No German index losers yet.</td></tr>`;
+
   const warning = snapshot.error
     ? `<p id="degiroid-error">${escapeHtml(snapshot.error)}</p>`
     : "";
@@ -129,6 +153,18 @@ function renderSnapshot(snapshot: DegiroSessionSnapshot): void {
       </article>
     </div>
     ${warning}
+    <p id="degiroid-section-label">German index losers · top 10</p>
+    <table id="degiroid-losers">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Name</th>
+          <th>Last</th>
+          <th>Day %</th>
+        </tr>
+      </thead>
+      <tbody>${loserRows}</tbody>
+    </table>
     <p id="degiroid-section-label">Outstanding orders · Δ market − order</p>
     <ul id="degiroid-orders">${orderItems}</ul>
   `;
@@ -154,6 +190,7 @@ async function runSync(): Promise<DegiroSessionSnapshot> {
         client: null,
         positions: [],
         orders: [],
+        indexLosers: [],
         cashValue: null,
         portfolioValue: null,
         lastSyncedAt: null,

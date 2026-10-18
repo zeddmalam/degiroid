@@ -1,5 +1,6 @@
 import {
   deltaTone,
+  formatChangePct,
   formatDelta,
   formatMoney,
   formatPrice,
@@ -15,9 +16,41 @@ const metrics = document.querySelector("#metrics");
 const portfolioValue = document.querySelector("#portfolio-value");
 const cashValue = document.querySelector("#cash-value");
 const orderCount = document.querySelector("#order-count");
+const losers = document.querySelector("#losers");
 const orders = document.querySelector("#orders");
 const syncBtn = document.querySelector("#sync-btn");
 const openTraderBtn = document.querySelector("#open-trader-btn");
+
+function renderLosers(snapshot: DegiroSessionSnapshot): void {
+  if (!(losers instanceof HTMLElement)) return;
+
+  const rows = snapshot.indexLosers ?? [];
+  if (!snapshot.connected) {
+    losers.innerHTML = "";
+    return;
+  }
+
+  if (rows.length === 0) {
+    losers.innerHTML = `<tr><td colspan="4" class="empty">No German index losers yet.</td></tr>`;
+    return;
+  }
+
+  losers.innerHTML = rows
+    .map((row, i) => {
+      const label = row.symbol ? `${row.symbol} · ${row.name}` : row.name;
+      const indexes = row.indexes.join(" · ");
+      return `<tr data-tone="negative">
+        <td class="loser-rank">${i + 1}</td>
+        <td class="loser-name">
+          <span>${label}</span>
+          ${indexes ? `<small>${indexes}</small>` : ""}
+        </td>
+        <td class="loser-price">${formatPrice(row.lastPrice)}</td>
+        <td class="loser-change">${formatChangePct(row.changePct)}</td>
+      </tr>`;
+    })
+    .join("");
+}
 
 function render(snapshot: DegiroSessionSnapshot): void {
   if (
@@ -53,6 +86,7 @@ function render(snapshot: DegiroSessionSnapshot): void {
   }
 
   metrics.hidden = !snapshot.connected;
+  renderLosers(snapshot);
 
   if (orders) {
     if (snapshot.orders.length === 0) {
@@ -98,6 +132,7 @@ async function request(
       client: null,
       positions: [],
       orders: [],
+      indexLosers: [],
       cashValue: null,
       portfolioValue: null,
       lastSyncedAt: null,
