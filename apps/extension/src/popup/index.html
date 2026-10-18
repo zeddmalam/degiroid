@@ -4,60 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Degiroid</title>
-    <link rel="stylesheet" href="./popup.css" />
   </head>
   <body>
-    <main>
-      <header>
-        <div>
-          <p class="eyebrow">Degiroid</p>
-          <h1>DEGIRO companion</h1>
-        </div>
-        <span id="badge" data-state="pending">…</span>
-      </header>
-
-      <section id="summary">
-        <p id="status">Checking DEGIRO session…</p>
-      </section>
-
-      <section id="metrics" hidden>
-        <article>
-          <span>Portfolio</span>
-          <strong id="portfolio-value">—</strong>
-        </article>
-        <article>
-          <span>Cash</span>
-          <strong id="cash-value">—</strong>
-        </article>
-        <article>
-          <span>Orders</span>
-          <strong id="order-count">—</strong>
-        </article>
-      </section>
-
-      <p class="section-label">German index losers · top 10</p>
-      <table id="losers-table">
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>Name</th>
-            <th>Last</th>
-            <th>Day %</th>
-          </tr>
-        </thead>
-        <tbody id="losers"></tbody>
-      </table>
-
-      <p class="section-label">Outstanding orders · Δ market − order</p>
-      <ul id="orders"></ul>
-
-      <footer>
-        <button type="button" id="sync-btn">Sync now</button>
-        <button type="button" id="open-trader-btn" class="secondary">
-          Open trader
-        </button>
-      </footer>
-    </main>
-    <script type="module" src="./main.ts"></script>
+    <div id="root"></div>
+    <script type="module" src="./main.tsx"></script>
   </body>
 </html>

@@ -77,11 +77,14 @@ h1 {
   color: var(--muted);
 }
 
+#metrics-wrap {
+  margin-top: 12px;
+}
+
 #metrics {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
-  margin-top: 12px;
 }
 
 #metrics article {

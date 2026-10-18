@@ -1,12 +1,24 @@
-import { config as baseConfig } from "@repo/eslint-config/base";
+import { config as reactConfig } from "@repo/eslint-config/react-internal";
+import babelParser from "@babel/eslint-parser";
 import globals from "globals";
 
 /** @type {import("eslint").Linter.Config[]} */
 export default [
-  ...baseConfig,
+  ...reactConfig,
   {
-    files: ["src/**/*.{js,ts}"],
+    files: ["src/**/*.{js,ts,tsx}"],
     languageOptions: {
+      parser: babelParser,
+      parserOptions: {
+        requireConfigFile: false,
+        babelOptions: {
+          presets: [
+            "@babel/preset-typescript",
+            ["@babel/preset-react", { runtime: "automatic" }],
+          ],
+          plugins: ["@babel/plugin-syntax-jsx"],
+        },
+      },
       globals: {
         ...globals.browser,
         ...globals.serviceworker,
