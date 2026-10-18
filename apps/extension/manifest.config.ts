@@ -38,8 +38,7 @@ export default defineManifest({
     },
     {
       matches: [TRADER_MATCH],
-      js: ["src/content/index.ts"],
-      css: ["src/content/panel.css"],
+      js: ["src/content/index.tsx"],
       run_at: "document_idle",
     },
   ],

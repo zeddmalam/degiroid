@@ -12,15 +12,24 @@
   "devDependencies": {
     "@babel/core": "8.0.1",
     "@babel/eslint-parser": "8.0.1",
+    "@babel/plugin-syntax-jsx": "^8.0.1",
+    "@babel/preset-react": "^8.0.1",
     "@babel/preset-typescript": "8.0.1",
     "@crxjs/vite-plugin": "^2.2.0",
     "@repo/eslint-config": "*",
     "@repo/typescript-config": "*",
     "@types/chrome": "^0.1.24",
     "@types/node": "26.4.1",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.5",
+    "@vitejs/plugin-react": "^4.5.2",
     "eslint": "10.9.1",
     "globals": "17.12.0",
     "typescript": "7.0.2",
     "vite": "^6.3.5"
+  },
+  "dependencies": {
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
   }
 }
