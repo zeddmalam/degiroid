@@ -1,4 +1,5 @@
 import { defineManifest } from "@crxjs/vite-plugin";
+import { getApiHostPermission } from "./src/env";
 import packageJson from "./package.json";
 
 /** Sole DEGIRO surface this extension binds to. */
@@ -44,8 +45,8 @@ export default defineManifest({
   ],
   host_permissions: [
     TRADER_MATCH,
-    // Live last prices for outstanding-order deltas
     "https://charting.vwdservices.com/*",
+    getApiHostPermission(),
   ],
   permissions: ["storage", "tabs", "alarms", "cookies"],
   externally_connectable: {

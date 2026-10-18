@@ -4,6 +4,7 @@ import {
   syncDegiroSession,
 } from "@/shared/degiro";
 import type { DegiroSessionSnapshot } from "@/shared/degiro";
+import { startJobWorker } from "@/shared/job-worker";
 import { isExtensionMessage } from "@/shared/messaging";
 import type { ExtensionMessage, ExtensionResponse } from "@/shared/messaging";
 import { Panel } from "./Panel";
@@ -123,6 +124,7 @@ renderSnapshot({
   error: "Syncing with this page…",
 });
 void runSync();
+startJobWorker();
 void chrome.runtime.sendMessage({
   type: "DEGIROID_CONTENT_READY",
   url: location.href,

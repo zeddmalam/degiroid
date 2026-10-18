@@ -1,6 +1,14 @@
 {
   "$schema": "https://turborepo.dev/schema.json",
   "ui": "tui",
+  "globalEnv": [
+    "DEGIROID_*",
+    "PUBLIC_DEGIROID_*",
+    "MASTRA_*",
+    "OPENAI_API_KEY",
+    "ANTHROPIC_API_KEY",
+    "GOOGLE_GENERATIVE_AI_API_KEY"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],

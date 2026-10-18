@@ -29,7 +29,10 @@
     "vite": "^6.3.5"
   },
   "dependencies": {
+    "@repo/degiro": "*",
+    "@t3-oss/env-core": "^0.13.10",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "zod": "^4.0.0"
   }
 }
