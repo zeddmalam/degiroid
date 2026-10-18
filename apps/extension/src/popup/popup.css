@@ -112,11 +112,84 @@ h1 {
   color: var(--muted);
 }
 
+#losers-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 6px 0 0;
+  font-size: 12px;
+}
+
+#losers-table th {
+  text-align: left;
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 0 4px 6px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+#losers-table th:nth-child(3),
+#losers-table th:nth-child(4),
+#losers-table td:nth-child(3),
+#losers-table td:nth-child(4) {
+  text-align: right;
+}
+
+#losers-table td {
+  padding: 7px 4px 7px 0;
+  vertical-align: top;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  color: var(--muted);
+}
+
+#losers-table tbody tr:first-child td {
+  border-top: none;
+}
+
+#losers-table .loser-rank {
+  width: 1.5em;
+  font-variant-numeric: tabular-nums;
+}
+
+#losers-table .loser-name span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 180px;
+  color: var(--text);
+}
+
+#losers-table .loser-name small {
+  display: block;
+  margin-top: 2px;
+  font-size: 9px;
+  color: var(--muted);
+}
+
+#losers-table .loser-price,
+#losers-table .loser-change {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+#losers-table tr[data-tone="negative"] .loser-change {
+  color: var(--danger);
+  font-weight: 650;
+}
+
+#losers-table td.empty {
+  color: var(--muted);
+  border-top: none;
+}
+
 #orders {
   list-style: none;
   margin: 6px 0 0;
   padding: 0;
-  max-height: 240px;
+  max-height: 220px;
   overflow: auto;
 }
 
@@ -180,7 +253,7 @@ footer {
   margin-top: 14px;
 }
 
-button {
+footer button {
   flex: 1;
   border: 0;
   border-radius: 10px;
@@ -191,12 +264,12 @@ button {
   cursor: pointer;
 }
 
-button.secondary {
+footer button.secondary {
   background: transparent;
   color: var(--text);
   border: 1px solid var(--line);
 }
 
-button:hover {
+footer button:hover {
   filter: brightness(1.05);
 }

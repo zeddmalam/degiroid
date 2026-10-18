@@ -69,6 +69,21 @@ export type DegiroOrder = {
   orderType?: string;
 };
 
+export type GermanIndexKey = "dax" | "mdax" | "sdax" | "tecdax";
+
+export type DegiroIndexLoser = {
+  /** Indexes this product appears in (e.g. DAX + TecDAX). */
+  indexes: string[];
+  productId: string;
+  name: string;
+  symbol?: string;
+  currency?: string;
+  lastPrice: number | null;
+  closePrice: number | null;
+  change: number | null;
+  changePct: number | null;
+};
+
 export type DegiroSessionSnapshot = {
   connected: boolean;
   pageKind: DegiroPageKind;
@@ -76,11 +91,29 @@ export type DegiroSessionSnapshot = {
   client: DegiroClientInfo | null;
   positions: DegiroPosition[];
   orders: DegiroOrder[];
+  /** Top day-losers across DAX / MDAX / SDAX / TecDAX (deduped). */
+  indexLosers: DegiroIndexLoser[];
   cashValue: number | null;
   portfolioValue: number | null;
   lastSyncedAt: number | null;
   error: string | null;
 };
+
+export const GERMAN_INDEXES: ReadonlyArray<{
+  key: GermanIndexKey;
+  name: string;
+  indexId: number;
+}> = [
+  { key: "dax", name: "DAX", indexId: 6 },
+  { key: "mdax", name: "MDAX", indexId: 106001 },
+  { key: "sdax", name: "SDAX", indexId: 106002 },
+  { key: "tecdax", name: "TecDAX", indexId: 106003 },
+];
+
+/** DEGIRO `stockCountries` id for Germany. */
+const GERMANY_STOCK_COUNTRY_ID = 906;
+const INDEX_LOSERS_LIMIT = 10;
+const CHART_SERIES_BATCH = 25;
 
 export const emptySnapshot = (
   url = "",
@@ -92,6 +125,7 @@ export const emptySnapshot = (
   client: null,
   positions: [],
   orders: [],
+  indexLosers: [],
   cashValue: null,
   portfolioValue: null,
   lastSyncedAt: null,
@@ -147,6 +181,11 @@ type ProductInfo = {
 
 type ProductInfoResponse = {
   data?: Record<string, ProductInfo>;
+};
+
+type StocksSearchResponse = {
+  products?: ProductInfo[];
+  total?: number;
 };
 
 type ChartSeries = {
@@ -379,12 +418,12 @@ async function fetchProductInfos(
   return map;
 }
 
-async function fetchLastPrices(
-  productsById: Map<string, ProductInfo>,
-  userToken: number | undefined,
+async function fetchLastPricesBatch(
+  entries: Array<[string, ProductInfo]>,
+  userToken: number,
 ): Promise<Map<string, number>> {
   const prices = new Map<string, number>();
-  if (!userToken || productsById.size === 0) return prices;
+  if (entries.length === 0) return prices;
 
   const url = new URL(`${DEGIRO_CHARTING_ORIGIN}/hchart/v1/deGiro/data.js`);
   url.searchParams.set("requestid", "1");
@@ -394,7 +433,7 @@ async function fetchLastPrices(
   url.searchParams.set("userToken", String(userToken));
 
   const vwdToProduct = new Map<string, string>();
-  for (const [productId, product] of productsById) {
+  for (const [productId, product] of entries) {
     const vwdId = product.vwdId ?? product.vwdIdSecondary;
     if (!vwdId) continue;
     const identifierType = product.vwdIdentifierType ?? "issueid";
@@ -436,6 +475,124 @@ async function fetchLastPrices(
   }
 
   return prices;
+}
+
+async function fetchLastPrices(
+  productsById: Map<string, ProductInfo>,
+  userToken: number | undefined,
+): Promise<Map<string, number>> {
+  const prices = new Map<string, number>();
+  if (!userToken || productsById.size === 0) return prices;
+
+  const entries = [...productsById.entries()];
+  for (let i = 0; i < entries.length; i += CHART_SERIES_BATCH) {
+    const batch = entries.slice(i, i + CHART_SERIES_BATCH);
+    const batchPrices = await fetchLastPricesBatch(batch, userToken);
+    for (const [id, price] of batchPrices) prices.set(id, price);
+  }
+
+  return prices;
+}
+
+async function fetchIndexStocks(
+  indexId: number,
+  sessionId: string,
+  intAccount: number,
+): Promise<ProductInfo[]> {
+  const url = withSessionId(
+    `${DEGIRO_TRADER_ORIGIN}/productsearch/secure/v1/stocks`,
+    sessionId,
+    {
+      indexId: String(indexId),
+      stockCountryId: String(GERMANY_STOCK_COUNTRY_ID),
+      offset: "0",
+      limit: "200",
+      requireTotal: "true",
+      sortColumns: "name",
+      sortTypes: "asc",
+      intAccount: String(intAccount),
+    },
+  );
+
+  const response = await pageFetch(url, {
+    headers: { Accept: "application/json" },
+  });
+
+  if (!response.ok) {
+    throw new Error(`DEGIRO index stocks failed (${response.status})`);
+  }
+
+  const json = (await response.json()) as StocksSearchResponse;
+  return json.products ?? [];
+}
+
+/**
+ * Top day-losers across DAX, MDAX, SDAX, and TecDAX (deduped by product).
+ * Sorted ascending by day % (biggest loser first).
+ */
+export async function fetchGermanIndexLosers(
+  sessionId: string,
+  intAccount: number,
+  userToken: number | undefined,
+): Promise<DegiroIndexLoser[]> {
+  if (!userToken) return [];
+
+  const productsByIndex = await Promise.all(
+    GERMAN_INDEXES.map(async (index) => ({
+      index,
+      products: await fetchIndexStocks(index.indexId, sessionId, intAccount),
+    })),
+  );
+
+  const allProducts = new Map<string, ProductInfo>();
+  const indexesByProduct = new Map<string, string[]>();
+
+  for (const { index, products } of productsByIndex) {
+    for (const product of products) {
+      const id = asString(product.id);
+      if (!id) continue;
+      allProducts.set(id, { ...product, id });
+      const indexes = indexesByProduct.get(id) ?? [];
+      if (!indexes.includes(index.name)) indexes.push(index.name);
+      indexesByProduct.set(id, indexes);
+    }
+  }
+
+  const lastPrices = await fetchLastPrices(allProducts, userToken);
+  const ranked: DegiroIndexLoser[] = [];
+
+  for (const [productId, product] of allProducts) {
+    const closePrice = asNumber(product.closePrice) ?? null;
+    const lastPrice = lastPrices.get(productId) ?? null;
+    const change =
+      lastPrice != null && closePrice != null ? lastPrice - closePrice : null;
+    const changePct =
+      change != null && closePrice != null && closePrice !== 0
+        ? change / closePrice
+        : null;
+
+    ranked.push({
+      indexes: indexesByProduct.get(productId) ?? [],
+      productId,
+      name: product.name ?? product.symbol ?? `Product ${productId}`,
+      symbol: product.symbol,
+      currency: product.currency,
+      lastPrice,
+      closePrice,
+      change,
+      changePct,
+    });
+  }
+
+  ranked.sort((a, b) => {
+    const aPct = a.changePct ?? Number.POSITIVE_INFINITY;
+    const bPct = b.changePct ?? Number.POSITIVE_INFINITY;
+    return aPct - bPct;
+  });
+
+  return ranked
+    .filter((row) => row.changePct != null && row.changePct < 0)
+    .slice(0, INDEX_LOSERS_LIMIT);
 }
 
 function enrichOrders(args: {
@@ -576,6 +733,7 @@ export async function syncDegiroSession(
 
     let products = new Map<string, ProductInfo>();
     let lastPrices = new Map<string, number>();
+    let indexLosers: DegiroIndexLoser[] = [];
     let enrichError: string | null = null;
 
     try {
@@ -592,6 +750,20 @@ export async function syncDegiroSession(
           : "Could not enrich order prices.";
     }
 
+    try {
+      indexLosers = await fetchGermanIndexLosers(
+        sessionId,
+        client.intAccount,
+        client.id,
+      );
+    } catch (error) {
+      const losersError =
+        error instanceof Error
+          ? error.message
+          : "Could not load German index losers.";
+      enrichError = enrichError ? `${enrichError} ${losersError}` : losersError;
+    }
+
     const orders = enrichOrders({
       orders: account.orders,
       positions: account.positions,
@@ -606,6 +778,7 @@ export async function syncDegiroSession(
       client,
       positions: account.positions,
       orders,
+      indexLosers,
       cashValue: account.cashValue,
       portfolioValue: account.portfolioValue,
       lastSyncedAt: Date.now(),
@@ -684,6 +857,15 @@ export function formatDelta(
     signDisplay: "exceptZero",
   }).format(deltaPct);
   return `${sign}${absolute} (${pct})`;
+}
+
+export function formatChangePct(changePct: number | null | undefined): string {
+  if (changePct == null || Number.isNaN(changePct)) return "—";
+  return new Intl.NumberFormat(undefined, {
+    style: "percent",
+    maximumFractionDigits: 2,
+    signDisplay: "exceptZero",
+  }).format(changePct);
 }
 
 export function deltaTone(

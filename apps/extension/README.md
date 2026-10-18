@@ -8,6 +8,7 @@ Chrome/Edge MV3 extension tightly bound to the DEGIRO web trader at
 - Injects only on `https://trader.degiro.nl/*`
 - Waits for the trader page session (fetching via a page-world bridge so cookies apply), then reads client, portfolio, and outstanding orders
 - Shows each outstanding order with the delta between market price and order price
+- Shows the top 10 day-losers across German indexes (DAX, MDAX, SDAX, TecDAX), deduped and sorted worst-first
 - Shows a floating panel on the trader SPA
 - Exposes the same snapshot in the toolbar popup
 
