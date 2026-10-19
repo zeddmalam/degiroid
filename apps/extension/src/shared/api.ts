@@ -8,10 +8,13 @@ export type StockRecommendation = {
   symbol?: string;
   action: "buy" | "watch" | "skip";
   buyRange: { low: number; high: number; currency: string } | null;
+  sellRange: { low: number; high: number; currency: string } | null;
+  quantity: number;
   currentPrice: number | null;
   significantDrop: boolean;
   summary: string;
   dropReasons: string[];
+  fundamentalReasons?: string[];
   ai: boolean;
 };
 

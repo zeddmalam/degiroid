@@ -136,7 +136,7 @@ function bridgeFetch(
     const timeout = window.setTimeout(() => {
       window.removeEventListener("message", onMessage);
       reject(new Error("Page fetch bridge timeout"));
-    }, 15_000);
+    }, 60_000);
 
     function onMessage(event: MessageEvent): void {
       if (event.source !== window) return;

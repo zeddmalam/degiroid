@@ -6,11 +6,12 @@ Config: single repo-root [`.env`](../../.env.example), validated in [`src/env.ts
 
 ## Tools
 
-- `lookup_stock`
-- `get_quote`
-- `get_price_history`
+- `lookup_stock` — `name` and/or `ticker` (or free-text `query`)
+- `get_quote` — `productId`, or `name` / `ticker`
+- `get_price_history` — `productId`, or `name` / `ticker`
 - `get_index_losers`
-- `structured_analyze`
+- `structured_analyze` — `productId`, or `name` / `ticker`
+- `research_fundamentals` — company overview + recent headlines (`name` / `ticker` / `query`)
 
 ## Run
 
@@ -20,7 +21,7 @@ Requires the API (see `DEGIROID_API_*` in root `.env`).
 bun run dev --filter=mcp
 ```
 
-HTTP MCP URL is derived from `DEGIROID_MCP_HOST` / `PORT` / `PATH` (default `http://127.0.0.1:3922/mcp`). Keep [`.cursor/mcp.json`](../../.cursor/mcp.json) in sync with that URL.
+HTTP MCP URL is derived from `DEGIROID_MCP_HOST` / `PORT` / `PATH` (must be set in root `.env`). Keep [`.cursor/mcp.json`](../../.cursor/mcp.json) in sync with that URL.
 
 Stdio (optional):
 

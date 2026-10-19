@@ -7,9 +7,10 @@ const repoRoot = path.resolve(__dirname, "../..");
 
 export default defineConfig(async ({ mode }) => {
   // Vite runs this config under Node (not Bun), so do not import @repo/env's .ts.
-  // loadEnv reads the single repo-root .env before createEnv in manifest/src/env.
+  // loadEnv reads the single repo-root .env before createEnv in src/env.
   Object.assign(process.env, loadEnv(mode, repoRoot, ""));
 
+  const { DEGIROID_API_ORIGIN } = await import("./src/env");
   const { default: manifest } = await import("./manifest.config");
 
   return {
@@ -26,9 +27,8 @@ export default defineConfig(async ({ mode }) => {
       },
     },
     define: {
-      "process.env.PUBLIC_DEGIROID_API_ORIGIN": JSON.stringify(
-        process.env.PUBLIC_DEGIROID_API_ORIGIN ?? "http://127.0.0.1:3921",
-      ),
+      "process.env.PUBLIC_DEGIROID_API_ORIGIN":
+        JSON.stringify(DEGIROID_API_ORIGIN),
     },
     build: {
       outDir: "dist",

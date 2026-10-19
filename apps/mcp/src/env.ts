@@ -6,13 +6,13 @@ loadRootEnv();
 
 export const env = createEnv({
   server: {
-    DEGIROID_MCP_HOST: z.string().min(1).default("127.0.0.1"),
-    DEGIROID_MCP_PORT: z.coerce.number().int().positive().default(3922),
-    DEGIROID_MCP_PATH: z.string().regex(/^\//).default("/mcp"),
+    DEGIROID_MCP_HOST: z.string().min(1),
+    DEGIROID_MCP_PORT: z.coerce.number().int().positive(),
+    DEGIROID_MCP_PATH: z.string().regex(/^\//),
 
     DEGIROID_API_ORIGIN: z.string().url().optional(),
-    DEGIROID_API_HOST: z.string().min(1).default("127.0.0.1"),
-    DEGIROID_API_PORT: z.coerce.number().int().positive().default(3921),
+    DEGIROID_API_HOST: z.string().min(1),
+    DEGIROID_API_PORT: z.coerce.number().int().positive(),
   },
   runtimeEnv: process.env,
   emptyStringAsUndefined: true,

@@ -20,10 +20,11 @@ Config: single repo-root [`.env`](../../.env.example), validated in [`src/env.ts
 | `POST /jobs/:id/result` | Extension job result |
 | `GET /v1/stocks/lookup?q=` | Product lookup |
 | `GET /v1/stocks/:id/quote` | Quote |
-| `GET /v1/stocks/:id/history` | Short history |
+| `GET /v1/stocks/:id/history` | Intraday history (default P1D / PT1M) |
 | `GET /v1/indexes/losers` | German index losers |
-| `POST /v1/stocks/structured-analyze` | Deterministic analysis |
-| `POST /v1/stocks/analyze` | Mastra (or heuristic) analyze |
+| `POST /v1/stocks/structured-analyze` | Deterministic technical analysis |
+| `POST /v1/stocks/analyze` | Mastra (or heuristic) analyze — technical + fundamental |
+| `POST /v1/stocks/research-fundamentals` | Wikipedia overview + Google News headlines |
 | `GET/POST /v1/recommendations/losers` | Loser recommendations |
 
 Recommendations are **not financial advice**.

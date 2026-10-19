@@ -131,6 +131,7 @@ export type StructuredAnalyzeResult = {
   recentHigh: number | null;
   recentLow: number | null;
   buyRange: { low: number; high: number; currency: string } | null;
+  sellRange: { low: number; high: number; currency: string } | null;
   significantDrop: boolean;
   dropReasons: string[];
   summary: string;
@@ -144,10 +145,15 @@ export type StockRecommendation = {
   symbol?: string;
   action: RecommendationAction;
   buyRange: { low: number; high: number; currency: string } | null;
+  sellRange: { low: number; high: number; currency: string } | null;
+  quantity: number;
   currentPrice: number | null;
   significantDrop: boolean;
   summary: string;
+  /** Intraday / price-structure reasons (technical). */
   dropReasons: string[];
+  /** News / business / valuation points grounded in research tools. */
+  fundamentalReasons: string[];
   ai: boolean;
 };
 

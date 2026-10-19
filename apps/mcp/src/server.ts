@@ -1,6 +1,13 @@
 import { McpServer } from "@modelcontextprotocol/server";
 import * as z from "zod/v4";
 import { marketApi } from "./api-client";
+import {
+  hasStockIdentifier,
+  pickLookupMatch,
+  searchTextFromRef,
+  type LookupProduct,
+  type StockRef,
+} from "./stock-ref";
 
 function textResult(data: unknown) {
   return {
@@ -13,6 +20,40 @@ function textResult(data: unknown) {
   };
 }
 
+const stockRefSchema = {
+  productId: z.string().optional().describe("DEGIRO product id"),
+  name: z.string().optional().describe("Company / product name"),
+  ticker: z.string().optional().describe("Stock ticker / symbol"),
+  query: z
+    .string()
+    .optional()
+    .describe("Free-text fallback: name, ticker, or ISIN"),
+};
+
+async function resolveProductId(ref: StockRef): Promise<{
+  productId: string;
+  match: LookupProduct;
+  matches: LookupProduct[];
+}> {
+  if (ref.productId?.trim()) {
+    const productId = ref.productId.trim();
+    return {
+      productId,
+      match: { id: productId, name: productId },
+      matches: [],
+    };
+  }
+
+  const search = searchTextFromRef(ref);
+  const { products } = await marketApi.lookup(search, 10);
+  const list = products as LookupProduct[];
+  const match = pickLookupMatch(list, ref);
+  if (!match) {
+    throw new Error(`No stock found for “${search}”`);
+  }
+  return { productId: match.id, match, matches: list };
+}
+
 export function createDegiroidMcpServer(): McpServer {
   const server = new McpServer({
     name: "degiroid",
@@ -23,39 +64,84 @@ export function createDegiroidMcpServer(): McpServer {
     "lookup_stock",
     {
       description:
-        "Look up DEGIRO stock products by name, ticker, or ISIN (via Degiroid extension session).",
+        "Look up DEGIRO stock products by name and/or ticker (or ISIN via query).",
       inputSchema: z.object({
-        query: z.string().describe("Name, ticker, or ISIN"),
+        name: z.string().optional().describe("Company / product name"),
+        ticker: z.string().optional().describe("Stock ticker / symbol"),
+        query: z
+          .string()
+          .optional()
+          .describe("Free-text: name, ticker, or ISIN"),
         limit: z.number().int().min(1).max(25).optional(),
       }),
     },
-    async ({ query, limit }) => textResult(await marketApi.lookup(query, limit)),
+    async ({ name, ticker, query, limit }) => {
+      const ref = { name, ticker, query };
+      if (!hasStockIdentifier(ref)) {
+        throw new Error("Provide name, ticker, or query");
+      }
+      const search = searchTextFromRef(ref);
+      const result = await marketApi.lookup(search, limit);
+      const products = result.products as LookupProduct[];
+      const bestMatch = pickLookupMatch(products, ref) ?? null;
+      return textResult({ ...result, bestMatch });
+    },
   );
 
   server.registerTool(
     "get_quote",
     {
-      description: "Get last price, previous close, and day change for a product.",
-      inputSchema: z.object({
-        productId: z.string().describe("DEGIRO product id"),
-      }),
+      description:
+        "Get last price, previous close, and day change. Identify the stock by productId, name, and/or ticker.",
+      inputSchema: z.object(stockRefSchema),
     },
-    async ({ productId }) => textResult(await marketApi.quote(productId)),
+    async (ref) => {
+      if (!hasStockIdentifier(ref)) {
+        throw new Error("Provide productId, name, ticker, or query");
+      }
+      if (ref.productId?.trim() && !ref.name && !ref.ticker && !ref.query) {
+        return textResult(await marketApi.quote(ref.productId.trim()));
+      }
+      const { productId, match } = await resolveProductId(ref);
+      return textResult({
+        match,
+        quote: await marketApi.quote(productId),
+      });
+    },
   );
 
   server.registerTool(
     "get_price_history",
     {
       description:
-        "Short-term price history for support/resistance (default ~5 days).",
+        "Intraday price history for day-trade structure (default P1D / PT1M). Identify the stock by productId, name, and/or ticker.",
       inputSchema: z.object({
-        productId: z.string(),
-        period: z.string().optional().describe("ISO-8601 period, e.g. P5D"),
-        resolution: z.string().optional().describe("e.g. PT1H"),
+        ...stockRefSchema,
+        period: z
+          .string()
+          .optional()
+          .describe("ISO-8601 period; default P1D for day-trade lookback"),
+        resolution: z
+          .string()
+          .optional()
+          .describe("Default PT1M for intraday bars"),
       }),
     },
-    async ({ productId, period, resolution }) =>
-      textResult(await marketApi.history(productId, period, resolution)),
+    async ({ period, resolution, ...ref }) => {
+      if (!hasStockIdentifier(ref)) {
+        throw new Error("Provide productId, name, ticker, or query");
+      }
+      if (ref.productId?.trim() && !ref.name && !ref.ticker && !ref.query) {
+        return textResult(
+          await marketApi.history(ref.productId.trim(), period, resolution),
+        );
+      }
+      const { productId, match } = await resolveProductId(ref);
+      return textResult({
+        match,
+        history: await marketApi.history(productId, period, resolution),
+      });
+    },
   );
 
   server.registerTool(
@@ -72,18 +158,52 @@ export function createDegiroidMcpServer(): McpServer {
     "structured_analyze",
     {
       description:
-        "Deterministic short-term buy-band analysis (no LLM). Provide productId or query.",
+        "Deterministic day-trade buy-band analysis from intraday history (no LLM). Identify by productId, name, and/or ticker.",
+      inputSchema: z.object(stockRefSchema),
+    },
+    async (ref) => {
+      if (!hasStockIdentifier(ref)) {
+        throw new Error("Provide productId, name, ticker, or query");
+      }
+      if (ref.productId?.trim()) {
+        return textResult(
+          await marketApi.structuredAnalyze({
+            productId: ref.productId.trim(),
+          }),
+        );
+      }
+      const { productId, match, matches } = await resolveProductId(ref);
+      const result = await marketApi.structuredAnalyze({ productId });
+      return textResult({ match, matches, ...((result as object) ?? {}) });
+    },
+  );
+
+  server.registerTool(
+    "research_fundamentals",
+    {
+      description:
+        "Public fundamental context: company overview (Wikipedia) and recent news headlines (Google News RSS). Use before recommending buy/watch/skip. Does not invent facts — only returns fetched snippets.",
       inputSchema: z.object({
-        productId: z.string().optional(),
-        query: z.string().optional(),
+        name: z.string().optional().describe("Company / product name"),
+        ticker: z.string().optional().describe("Stock ticker / symbol"),
+        query: z
+          .string()
+          .optional()
+          .describe("Free-text fallback: name, ticker, or ISIN"),
+        headlineLimit: z.number().int().min(1).max(15).optional(),
       }),
     },
-    async ({ productId, query }) => {
-      if (!productId && !query) {
-        throw new Error("Provide productId or query");
+    async ({ name, ticker, query, headlineLimit }) => {
+      if (!name?.trim() && !ticker?.trim() && !query?.trim()) {
+        throw new Error("Provide name, ticker, or query");
       }
       return textResult(
-        await marketApi.structuredAnalyze({ productId, query }),
+        await marketApi.researchFundamentals({
+          name,
+          symbol: ticker,
+          query,
+          headlineLimit,
+        }),
       );
     },
   );

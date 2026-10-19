@@ -63,31 +63,55 @@ export function enqueueJob<T = unknown>(
 
 export async function takeNextJob(
   waitMs = JOB_POLL_WAIT_MS,
+  signal?: AbortSignal,
 ): Promise<Job | null> {
-  if (queue.length > 0) {
-    const pending = queue.shift()!;
-    inFlight.set(pending.job.id, pending);
-    return pending.job;
+  if (signal?.aborted) return null;
+
+  if (queue.length === 0) {
+    const gotJob = await new Promise<boolean>((resolve) => {
+      if (signal?.aborted) {
+        resolve(false);
+        return;
+      }
+
+      let settled = false;
+      const finish = (value: boolean) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        const idx = waiters.indexOf(onWake);
+        if (idx >= 0) waiters.splice(idx, 1);
+        signal?.removeEventListener("abort", onAbort);
+        resolve(value);
+      };
+
+      const timer = setTimeout(() => finish(false), waitMs);
+      const onWake = () => finish(true);
+      const onAbort = () => finish(false);
+
+      waiters.push(onWake);
+      signal?.addEventListener("abort", onAbort, { once: true });
+    });
+
+    if (!gotJob || signal?.aborted || queue.length === 0) return null;
   }
 
-  await new Promise<void>((resolve) => {
-    const timer = setTimeout(() => {
-      const idx = waiters.indexOf(onWake);
-      if (idx >= 0) waiters.splice(idx, 1);
-      resolve();
-    }, waitMs);
+  if (signal?.aborted) return null;
 
-    const onWake = () => {
-      clearTimeout(timer);
-      resolve();
-    };
-    waiters.push(onWake);
-  });
-
-  if (queue.length === 0) return null;
-  const pending = queue.shift()!;
+  const pending = queue.shift();
+  if (!pending) return null;
   inFlight.set(pending.job.id, pending);
   return pending.job;
+}
+
+/** Put a job back on the queue if the long-poll client disconnected. */
+export function requeueJob(id: string): boolean {
+  const pending = inFlight.get(id);
+  if (!pending) return false;
+  inFlight.delete(id);
+  queue.unshift(pending);
+  wake();
+  return true;
 }
 
 export function completeJob(

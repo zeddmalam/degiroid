@@ -1,5 +1,9 @@
-import { API_HOST, API_ORIGIN, API_PORT } from "./env";
-import { completeJob, jobStats, takeNextJob } from "./jobs";
+import { API_HOST, API_ORIGIN, API_PORT, JOB_TIMEOUT_MS } from "./env";
+import { completeJob, jobStats, requeueJob, takeNextJob } from "./jobs";
+import {
+  ANALYZE_HISTORY_PERIOD,
+  ANALYZE_HISTORY_RESOLUTION,
+} from "@repo/degiro";
 import {
   getIndexLosers,
   getPriceHistory,
@@ -8,6 +12,7 @@ import {
   structuredAnalyzeByProductId,
   structuredAnalyzeByQuery,
 } from "./market";
+import { researchFundamentals } from "./fundamentals";
 import {
   analyzeStock,
   getCachedLoserRecommendations,
@@ -31,9 +36,24 @@ function errorResponse(error: unknown, status = 500) {
   return json({ error: message }, status);
 }
 
+async function handleStockLookup(url: URL) {
+  const q = url.searchParams.get("q")?.trim();
+  if (!q) return json({ error: "Missing q" }, 400);
+  const limit = Number(url.searchParams.get("limit") ?? 10);
+  return json({ products: await lookupStock(q, limit) });
+}
+
+// Bun defaults to a 10s idleTimeout, which kills job long-polls and
+// waiting /v1/stocks/* handlers. Cap is 255 seconds.
+const idleTimeoutSec = Math.min(
+  255,
+  Math.max(60, Math.ceil(JOB_TIMEOUT_MS / 1000) + 5),
+);
+
 const server = Bun.serve({
   hostname: API_HOST,
   port: API_PORT,
+  idleTimeout: idleTimeoutSec,
   async fetch(req) {
     const url = new URL(req.url);
 
@@ -48,8 +68,12 @@ const server = Bun.serve({
 
       if (req.method === "GET" && url.pathname === "/jobs/next") {
         const wait = Number(url.searchParams.get("waitMs") ?? 25_000);
-        const job = await takeNextJob(wait);
+        const job = await takeNextJob(wait, req.signal);
         if (!job) return json({ job: null });
+        if (req.signal.aborted) {
+          requeueJob(job.id);
+          return json({ job: null });
+        }
         return json({ job });
       }
 
@@ -65,11 +89,11 @@ const server = Bun.serve({
         return json({ ok });
       }
 
-      if (req.method === "GET" && url.pathname === "/v1/stocks/lookup") {
-        const q = url.searchParams.get("q")?.trim();
-        if (!q) return json({ error: "Missing q" }, 400);
-        const limit = Number(url.searchParams.get("limit") ?? 10);
-        return json({ products: await lookupStock(q, limit) });
+      if (
+        req.method === "GET" &&
+        (url.pathname === "/v1/stocks/lookup" || url.pathname === "/v1/stocks")
+      ) {
+        return handleStockLookup(url);
       }
 
       const quoteMatch = url.pathname.match(
@@ -84,8 +108,10 @@ const server = Bun.serve({
       );
       if (req.method === "GET" && historyMatch) {
         const productId = decodeURIComponent(historyMatch[1]!);
-        const period = url.searchParams.get("period") ?? "P5D";
-        const resolution = url.searchParams.get("resolution") ?? "PT1H";
+        const period =
+          url.searchParams.get("period") ?? ANALYZE_HISTORY_PERIOD;
+        const resolution =
+          url.searchParams.get("resolution") ?? ANALYZE_HISTORY_RESOLUTION;
         return json(await getPriceHistory(productId, period, resolution));
       }
 
@@ -116,6 +142,22 @@ const server = Bun.serve({
         const body = (await req.json()) as { query?: string };
         if (!body.query?.trim()) return json({ error: "Missing query" }, 400);
         return json(await analyzeStock(body.query.trim()));
+      }
+
+      if (
+        req.method === "POST" &&
+        url.pathname === "/v1/stocks/research-fundamentals"
+      ) {
+        const body = (await req.json()) as {
+          name?: string;
+          symbol?: string;
+          query?: string;
+          headlineLimit?: number;
+        };
+        if (!body.name?.trim() && !body.symbol?.trim() && !body.query?.trim()) {
+          return json({ error: "Provide name, symbol, or query" }, 400);
+        }
+        return json(await researchFundamentals(body));
       }
 
       if (

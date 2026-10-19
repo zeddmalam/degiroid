@@ -15,13 +15,24 @@ function loserLabel(row: DegiroIndexLoser): string {
 
 function recLine(rec: StockRecommendation | undefined): string | null {
   if (!rec) return null;
-  const range =
+  const buy =
     rec.buyRange != null
-      ? `${formatPrice(rec.buyRange.low)}–${formatPrice(rec.buyRange.high)} ${rec.buyRange.currency}`
+      ? `buy ${formatPrice(rec.buyRange.low)}–${formatPrice(rec.buyRange.high)} ${rec.buyRange.currency}`
       : null;
+  const sell =
+    rec.sellRange != null
+      ? `sell ${formatPrice(rec.sellRange.low)}–${formatPrice(rec.sellRange.high)} ${rec.sellRange.currency}`
+      : null;
+  const qty = `qty ${rec.quantity}`;
   const parts = [rec.action.toUpperCase()];
-  if (range) parts.push(range);
+  if (buy) parts.push(buy);
+  if (sell) parts.push(sell);
+  if (qty) parts.push(qty);
   if (rec.summary) parts.push(rec.summary);
+  const fundamentals = (rec.fundamentalReasons ?? []).filter(Boolean);
+  if (fundamentals.length > 0) {
+    parts.push(`fundamentals: ${fundamentals.slice(0, 2).join("; ")}`);
+  }
   return parts.join(" · ");
 }
 

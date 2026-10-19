@@ -50,8 +50,8 @@ async function runJob(job: Job): Promise<unknown> {
     case "get_price_history":
       return api.getPriceHistory(
         String(params.productId),
-        String(params.period ?? "P5D"),
-        String(params.resolution ?? "PT1H"),
+        String(params.period ?? "P1D"),
+        String(params.resolution ?? "PT1M"),
       );
     case "get_index_losers":
       return api.fetchGermanIndexLosers();

@@ -36,13 +36,23 @@ export const marketApi = {
     ),
   quote: (productId: string) =>
     api<unknown>(`/v1/stocks/${encodeURIComponent(productId)}/quote`),
-  history: (productId: string, period = "P5D", resolution = "PT1H") =>
+  history: (productId: string, period = "P1D", resolution = "PT1M") =>
     api<unknown>(
       `/v1/stocks/${encodeURIComponent(productId)}/history?period=${encodeURIComponent(period)}&resolution=${encodeURIComponent(resolution)}`,
     ),
   losers: () => api<{ losers: unknown[] }>("/v1/indexes/losers"),
   structuredAnalyze: (body: { productId?: string; query?: string }) =>
     api<unknown>("/v1/stocks/structured-analyze", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  researchFundamentals: (body: {
+    name?: string;
+    symbol?: string;
+    query?: string;
+    headlineLimit?: number;
+  }) =>
+    api<unknown>("/v1/stocks/research-fundamentals", {
       method: "POST",
       body: JSON.stringify(body),
     }),

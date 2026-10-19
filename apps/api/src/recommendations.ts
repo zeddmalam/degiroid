@@ -1,9 +1,11 @@
 import type { StockRecommendation } from "@repo/degiro";
-import { RECS_CACHE_TTL_MS } from "./env";
-import { heuristicLoserRecommendations } from "./market";
-import { runLosersRecommender, runStockAnalyst } from "./mastra/agents";
-import { structuredAnalyzeByQuery } from "./market";
 import { heuristicRecommendation } from "@repo/degiro";
+import { MAX_BUY_ORDER_AMOUNT, RECS_CACHE_TTL_MS } from "./env";
+import {
+  heuristicLoserRecommendations,
+  structuredAnalyzeByQuery,
+} from "./market";
+import { runLosersRecommender, runStockAnalyst } from "./mastra/agents";
 
 type CacheEntry = {
   at: number;
@@ -27,14 +29,18 @@ export async function analyzeStock(query: string) {
     if (error instanceof Error && error.message === "NO_MODEL_KEY") {
       return {
         ...structured,
-        recommendation: heuristicRecommendation(structured.analysis),
+        recommendation: heuristicRecommendation(structured.analysis, {
+          maxBuyEur: MAX_BUY_ORDER_AMOUNT,
+        }),
         ai: false as const,
       };
     }
     // Fall back to structured if MCP/Mastra fails
     return {
       ...structured,
-      recommendation: heuristicRecommendation(structured.analysis),
+      recommendation: heuristicRecommendation(structured.analysis, {
+        maxBuyEur: MAX_BUY_ORDER_AMOUNT,
+      }),
       ai: false as const,
       aiError: error instanceof Error ? error.message : "AI analyze failed",
     };

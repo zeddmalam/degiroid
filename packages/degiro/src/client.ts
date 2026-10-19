@@ -1,4 +1,8 @@
-import { structuredAnalyze } from "./analyze.js";
+import {
+  ANALYZE_HISTORY_PERIOD,
+  ANALYZE_HISTORY_RESOLUTION,
+  structuredAnalyze,
+} from "./analyze.js";
 import type {
   DegiroClientInfo,
   DegiroFetch,
@@ -333,8 +337,8 @@ export function createDegiroApi(options: DegiroApiOptions) {
 
   async function getPriceHistory(
     productId: string,
-    period = "P5D",
-    resolution = "PT1H",
+    period = ANALYZE_HISTORY_PERIOD,
+    resolution = ANALYZE_HISTORY_RESOLUTION,
   ): Promise<PriceHistory> {
     const products = await fetchProductInfos([productId]);
     const product = products.get(String(productId));

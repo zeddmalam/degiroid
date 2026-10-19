@@ -1,4 +1,6 @@
 import {
+  ANALYZE_HISTORY_PERIOD,
+  ANALYZE_HISTORY_RESOLUTION,
   heuristicRecommendation,
   structuredAnalyze,
   type PriceHistory,
@@ -8,6 +10,7 @@ import {
   type StructuredAnalyzeResult,
   type StockRecommendation,
 } from "@repo/degiro";
+import { MAX_BUY_ORDER_AMOUNT } from "./env";
 import { enqueueJob } from "./jobs";
 
 export async function lookupStock(query: string, limit = 10) {
@@ -20,8 +23,8 @@ export async function getQuote(productId: string) {
 
 export async function getPriceHistory(
   productId: string,
-  period = "P5D",
-  resolution = "PT1H",
+  period = ANALYZE_HISTORY_PERIOD,
+  resolution = ANALYZE_HISTORY_RESOLUTION,
 ) {
   return enqueueJob<PriceHistory>("get_price_history", {
     productId,
@@ -65,7 +68,11 @@ export async function heuristicLoserRecommendations(): Promise<
   for (const loser of losers) {
     try {
       const analysis = await structuredAnalyzeByProductId(loser.productId);
-      recs.push(heuristicRecommendation(analysis));
+      recs.push(
+        heuristicRecommendation(analysis, {
+          maxBuyEur: MAX_BUY_ORDER_AMOUNT,
+        }),
+      );
     } catch (error) {
       recs.push({
         productId: loser.productId,
@@ -73,11 +80,14 @@ export async function heuristicLoserRecommendations(): Promise<
         symbol: loser.symbol,
         action: "watch",
         buyRange: null,
+        sellRange: null,
+        quantity: 0,
         currentPrice: loser.lastPrice,
         significantDrop: (loser.changePct ?? 0) <= -0.03,
         summary:
           error instanceof Error ? error.message : "Could not analyze loser.",
         dropReasons: [],
+        fundamentalReasons: [],
         ai: false,
       });
     }

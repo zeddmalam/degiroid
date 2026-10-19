@@ -6,28 +6,21 @@ loadRootEnv();
 
 export const env = createEnv({
   server: {
-    DEGIROID_API_HOST: z.string().min(1).default("127.0.0.1"),
-    DEGIROID_API_PORT: z.coerce.number().int().positive().default(3921),
+    DEGIROID_API_HOST: z.string().min(1),
+    DEGIROID_API_PORT: z.coerce.number().int().positive(),
     DEGIROID_API_ORIGIN: z.string().url().optional(),
 
     DEGIROID_MCP_URL: z.string().url().optional(),
-    DEGIROID_MCP_HOST: z.string().min(1).default("127.0.0.1"),
-    DEGIROID_MCP_PORT: z.coerce.number().int().positive().default(3922),
-    DEGIROID_MCP_PATH: z.string().regex(/^\//).default("/mcp"),
+    DEGIROID_MCP_HOST: z.string().min(1),
+    DEGIROID_MCP_PORT: z.coerce.number().int().positive(),
+    DEGIROID_MCP_PATH: z.string().regex(/^\//),
 
-    DEGIROID_JOB_TIMEOUT_MS: z.coerce.number().int().positive().default(45_000),
-    DEGIROID_JOB_POLL_WAIT_MS: z.coerce
-      .number()
-      .int()
-      .positive()
-      .default(25_000),
-    DEGIROID_RECS_CACHE_TTL_MS: z.coerce
-      .number()
-      .int()
-      .positive()
-      .default(120_000),
+    DEGIROID_JOB_TIMEOUT_MS: z.coerce.number().int().positive(),
+    DEGIROID_JOB_POLL_WAIT_MS: z.coerce.number().int().positive(),
+    DEGIROID_RECS_CACHE_TTL_MS: z.coerce.number().int().positive(),
+    DEGIROID_MAX_BUY_ORDER_AMOUNT: z.coerce.number().positive(),
 
-    MASTRA_MODEL: z.string().min(1).default("openai/gpt-4o-mini"),
+    MASTRA_MODEL: z.string().min(1),
     OPENAI_API_KEY: z.string().optional(),
     ANTHROPIC_API_KEY: z.string().optional(),
     GOOGLE_GENERATIVE_AI_API_KEY: z.string().optional(),
@@ -49,12 +42,13 @@ export const MCP_URL =
 export const JOB_TIMEOUT_MS = env.DEGIROID_JOB_TIMEOUT_MS;
 export const JOB_POLL_WAIT_MS = env.DEGIROID_JOB_POLL_WAIT_MS;
 export const RECS_CACHE_TTL_MS = env.DEGIROID_RECS_CACHE_TTL_MS;
+export const MAX_BUY_ORDER_AMOUNT = env.DEGIROID_MAX_BUY_ORDER_AMOUNT;
 export const MASTRA_MODEL = env.MASTRA_MODEL;
 
 export function hasModelKey(): boolean {
   return Boolean(
     env.OPENAI_API_KEY ||
-      env.ANTHROPIC_API_KEY ||
-      env.GOOGLE_GENERATIVE_AI_API_KEY,
+    env.ANTHROPIC_API_KEY ||
+    env.GOOGLE_GENERATIVE_AI_API_KEY,
   );
 }
