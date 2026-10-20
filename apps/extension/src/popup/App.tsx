@@ -1,7 +1,6 @@
 import { sessionStatusLabel } from "@/shared/degiro";
-import { LosersTable } from "@/ui/LosersTable";
+import { ContentTabs } from "@/ui/ContentTabs";
 import { Metrics } from "@/ui/Metrics";
-import { OrdersList } from "@/ui/OrdersList";
 import { SessionBadge } from "@/ui/SessionBadge";
 import { useExtensionSnapshot } from "./useExtensionSnapshot";
 
@@ -28,11 +27,7 @@ export function App() {
         </section>
       ) : null}
 
-      <p className="section-label">German index losers · top 10</p>
-      <LosersTable snapshot={snapshot} variant="popup" />
-
-      <p className="section-label">Outstanding orders · Δ market − order</p>
-      <OrdersList snapshot={snapshot} variant="popup" />
+      <ContentTabs snapshot={snapshot} variant="popup" />
 
       <footer>
         <button type="button" onClick={syncNow}>

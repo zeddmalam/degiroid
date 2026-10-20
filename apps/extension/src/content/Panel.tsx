@@ -1,9 +1,8 @@
 import { useState } from "react";
 import { sessionStatusLabel } from "@/shared/degiro";
 import type { DegiroSessionSnapshot } from "@/shared/degiro";
-import { LosersTable } from "@/ui/LosersTable";
+import { ContentTabs } from "@/ui/ContentTabs";
 import { Metrics } from "@/ui/Metrics";
-import { OrdersList } from "@/ui/OrdersList";
 import { SessionBadge } from "@/ui/SessionBadge";
 
 type PanelProps = {
@@ -51,14 +50,7 @@ export function Panel({ snapshot }: PanelProps) {
                 {snapshot.error ? (
                   <p id="degiroid-error">{snapshot.error}</p>
                 ) : null}
-                <p id="degiroid-section-label">
-                  German index losers · top 10
-                </p>
-                <LosersTable snapshot={snapshot} variant="panel" />
-                <p id="degiroid-section-label">
-                  Outstanding orders · Δ market − order
-                </p>
-                <OrdersList snapshot={snapshot} variant="panel" />
+                <ContentTabs snapshot={snapshot} variant="panel" />
               </>
             )}
           </div>
