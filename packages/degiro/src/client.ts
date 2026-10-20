@@ -73,8 +73,15 @@ export type DegiroApiOptions = {
   userToken?: number;
 };
 
+type DegiroLoginConfig = {
+  clientId?: number | string;
+  productSearchUrl?: string;
+};
+
 export function createDegiroApi(options: DegiroApiOptions) {
-  const { fetch: degiroFetch, sessionId, intAccount, userToken } = options;
+  const { fetch: degiroFetch, sessionId, intAccount } = options;
+  let userToken = options.userToken;
+  let configLoaded = false;
 
   async function fetchClient(): Promise<DegiroClientInfo | null> {
     const url = withSessionId(
@@ -92,6 +99,36 @@ export function createDegiroApi(options: DegiroApiOptions) {
       data?: DegiroClientInfo;
     };
     return json.data ?? null;
+  }
+
+  async function fetchLoginConfig(): Promise<DegiroLoginConfig> {
+    const url = withSessionId(
+      `${DEGIRO_TRADER_ORIGIN}/login/secure/config`,
+      sessionId,
+    );
+    const response = await degiroFetch(url, {
+      headers: { Accept: "application/json" },
+    });
+    if (!response.ok) return {};
+    const json = (await response.json()) as { data?: DegiroLoginConfig };
+    return json.data ?? {};
+  }
+
+  async function ensureSessionMeta(): Promise<void> {
+    if (configLoaded && userToken) return;
+    configLoaded = true;
+    try {
+      const config = await fetchLoginConfig();
+      const configToken = asNumber(config.clientId) ?? undefined;
+      if (!userToken && configToken != null) userToken = configToken;
+    } catch {
+      /* config is best-effort */
+    }
+    if (!userToken) {
+      const client = await fetchClient();
+      const clientToken = asNumber(client?.id) ?? undefined;
+      if (clientToken != null) userToken = clientToken;
+    }
   }
 
   async function fetchAccountUpdate(): Promise<{
@@ -201,6 +238,7 @@ export function createDegiroApi(options: DegiroApiOptions) {
   async function fetchLastPrices(
     productsById: Map<string, ProductInfo>,
   ): Promise<Map<string, number>> {
+    await ensureSessionMeta();
     const prices = new Map<string, number>();
     if (!userToken || productsById.size === 0) return prices;
     const entries = [...productsById.entries()];
@@ -212,14 +250,35 @@ export function createDegiroApi(options: DegiroApiOptions) {
     return prices;
   }
 
+  function resolveProductIdFromChart(
+    vwdToProduct: Map<string, string>,
+    opts: {
+      seriesId?: string | null;
+      issueId?: string | null;
+      identifier?: string | null;
+    },
+  ): string | undefined {
+    const seriesId = opts.seriesId?.replace(/^price:/, "") ?? null;
+    return (
+      (opts.issueId ? vwdToProduct.get(opts.issueId) : undefined) ??
+      (opts.identifier ? vwdToProduct.get(opts.identifier) : undefined) ??
+      (seriesId ? vwdToProduct.get(seriesId) : undefined)
+    );
+  }
+
   async function fetchLastPricesBatch(
     entries: Array<[string, ProductInfo]>,
     period: string,
     resolution: string,
-  ): Promise<{ last: Map<string, number>; series: Map<string, PricePoint[]> }> {
+  ): Promise<{
+    last: Map<string, number>;
+    previousClose: Map<string, number>;
+    series: Map<string, PricePoint[]>;
+  }> {
     const last = new Map<string, number>();
+    const previousClose = new Map<string, number>();
     const series = new Map<string, PricePoint[]>();
-    if (entries.length === 0 || !userToken) return { last, series };
+    if (entries.length === 0 || !userToken) return { last, previousClose, series };
 
     const url = new URL(`${DEGIRO_CHARTING_ORIGIN}/hchart/v1/deGiro/data.js`);
     url.searchParams.set("requestid", "1");
@@ -239,16 +298,17 @@ export function createDegiroApi(options: DegiroApiOptions) {
       vwdToProduct.set(String(vwdId), productId);
       vwdToProduct.set(seriesKey, productId);
     }
-    if (vwdToProduct.size === 0) return { last, series };
+    if (vwdToProduct.size === 0) return { last, previousClose, series };
 
     try {
       const response = await degiroFetch(url.toString(), {
         headers: { Accept: "application/json" },
       });
-      if (!response.ok) return { last, series };
+      if (!response.ok) return { last, previousClose, series };
 
       const json = (await response.json()) as {
         series?: Array<{
+          id?: string;
           type?: string;
           data?: unknown;
         }>;
@@ -257,21 +317,29 @@ export function createDegiroApi(options: DegiroApiOptions) {
       for (const item of json.series ?? []) {
         const data = item.data;
         if (!data || typeof data !== "object") continue;
+        const seriesId = asString(item.id);
 
         if (!Array.isArray(data)) {
           const obj = data as {
             lastPrice?: number;
+            previousClosePrice?: number;
+            previousClose?: number;
+            closePrice?: number;
             issueId?: number | string;
             identifier?: string;
           };
-          const lastPrice = obj.lastPrice;
-          if (typeof lastPrice !== "number") continue;
-          const issueId = asString(obj.issueId);
-          const identifier = asString(obj.identifier);
-          const productId =
-            (issueId ? vwdToProduct.get(issueId) : undefined) ??
-            (identifier ? vwdToProduct.get(identifier) : undefined);
-          if (productId) last.set(productId, lastPrice);
+          const lastPrice = asNumber(obj.lastPrice);
+          // Prefer explicit previous-close fields; chart `closePrice` is often today's.
+          const prev =
+            asNumber(obj.previousClosePrice) ?? asNumber(obj.previousClose);
+          const productId = resolveProductIdFromChart(vwdToProduct, {
+            seriesId,
+            issueId: asString(obj.issueId),
+            identifier: asString(obj.identifier),
+          });
+          if (!productId) continue;
+          if (lastPrice != null) last.set(productId, lastPrice);
+          if (prev != null) previousClose.set(productId, prev);
           continue;
         }
 
@@ -289,21 +357,20 @@ export function createDegiroApi(options: DegiroApiOptions) {
         }
         if (points.length === 0) continue;
 
-        // Best-effort: attach to first mapped product in this batch
-        for (const [productId] of entries) {
-          if (!series.has(productId)) {
-            series.set(productId, points);
-            const end = points[points.length - 1];
-            if (end) last.set(productId, end.price);
-            break;
-          }
-        }
+        const productId =
+          resolveProductIdFromChart(vwdToProduct, { seriesId }) ??
+          [...entries].find(([id]) => !series.has(id))?.[0];
+        if (!productId) continue;
+
+        series.set(productId, points);
+        const end = points[points.length - 1];
+        if (end) last.set(productId, end.price);
       }
     } catch {
       /* charting best-effort */
     }
 
-    return { last, series };
+    return { last, previousClose, series };
   }
 
   async function getQuote(productId: string): Promise<StockQuote> {
@@ -378,6 +445,8 @@ export function createDegiroApi(options: DegiroApiOptions) {
   }
 
   async function fetchIndexStocks(indexId: number): Promise<ProductInfo[]> {
+    // Live DEGIRO uses productsearch/v1 for index constituents (not product_search/v5).
+    // API rejects limit > 100 (400). German indexes fit in one page (SDAX ~62).
     const url = withSessionId(
       `${DEGIRO_TRADER_ORIGIN}/productsearch/secure/v1/stocks`,
       sessionId,
@@ -385,7 +454,7 @@ export function createDegiroApi(options: DegiroApiOptions) {
         indexId: String(indexId),
         stockCountryId: String(GERMANY_STOCK_COUNTRY_ID),
         offset: "0",
-        limit: "200",
+        limit: "100",
         requireTotal: "true",
         sortColumns: "name",
         sortTypes: "asc",
@@ -398,12 +467,22 @@ export function createDegiroApi(options: DegiroApiOptions) {
     if (!response.ok) {
       throw new Error(`DEGIRO index stocks failed (${response.status})`);
     }
-    const json = (await response.json()) as { products?: ProductInfo[] };
+    let json: { products?: ProductInfo[] };
+    try {
+      json = (await response.json()) as { products?: ProductInfo[] };
+    } catch {
+      throw new Error("DEGIRO index stocks returned non-JSON response");
+    }
     return json.products ?? [];
   }
 
   async function fetchGermanIndexLosers(): Promise<DegiroIndexLoser[]> {
-    if (!userToken) return [];
+    await ensureSessionMeta();
+    if (!userToken) {
+      throw new Error(
+        "Missing DEGIRO user token; cannot load live prices for index losers.",
+      );
+    }
 
     const productsByIndex = await Promise.all(
       GERMAN_INDEXES.map(async (index) => ({
@@ -426,11 +505,33 @@ export function createDegiroApi(options: DegiroApiOptions) {
       }
     }
 
-    const lastPrices = await fetchLastPrices(allProducts);
+    if (allProducts.size === 0) {
+      throw new Error("DEGIRO returned no German index constituents.");
+    }
+
+    const lastPrices = new Map<string, number>();
+    const previousCloses = new Map<string, number>();
+    const entries = [...allProducts.entries()];
+    for (let i = 0; i < entries.length; i += CHART_SERIES_BATCH) {
+      const batch = entries.slice(i, i + CHART_SERIES_BATCH);
+      const batchPrices = await fetchLastPricesBatch(batch, "P1D", "PT1M");
+      for (const [id, price] of batchPrices.last) lastPrices.set(id, price);
+      for (const [id, price] of batchPrices.previousClose) {
+        previousCloses.set(id, price);
+      }
+    }
+
+    if (lastPrices.size === 0) {
+      throw new Error(
+        "Could not load live last prices for German index stocks.",
+      );
+    }
+
     const ranked: DegiroIndexLoser[] = [];
 
     for (const [productId, product] of allProducts) {
-      const closePrice = asNumber(product.closePrice) ?? null;
+      const closePrice =
+        previousCloses.get(productId) ?? asNumber(product.closePrice) ?? null;
       const lastPrice = lastPrices.get(productId) ?? null;
       const change =
         lastPrice != null && closePrice != null

@@ -5,13 +5,17 @@ import { defineConfig, loadEnv } from "vite";
 
 const repoRoot = path.resolve(__dirname, "../..");
 
-export default defineConfig(async ({ mode }) => {
+export default defineConfig(async ({ mode, command }) => {
   // Vite runs this config under Node (not Bun), so do not import @repo/env's .ts.
   // loadEnv reads the single repo-root .env before createEnv in src/env.
   Object.assign(process.env, loadEnv(mode, repoRoot, ""));
 
   const { DEGIROID_API_ORIGIN } = await import("./src/env");
   const { default: manifest } = await import("./manifest.config");
+
+  // Watch rebuilds must not wipe dist/ — Chrome keeps the unpacked extension
+  // loaded from there, and emptyOutDir races leave only icons briefly.
+  const watching = process.argv.includes("--watch");
 
   return {
     plugins: [react(), crx({ manifest })],
@@ -32,7 +36,7 @@ export default defineConfig(async ({ mode }) => {
     },
     build: {
       outDir: "dist",
-      emptyOutDir: true,
+      emptyOutDir: command === "build" && !watching,
       sourcemap: true,
     },
     server: {
