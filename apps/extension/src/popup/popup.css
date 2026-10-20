@@ -18,10 +18,18 @@ body {
   margin: 0;
   min-width: 360px;
   background:
-    radial-gradient(circle at top right, rgba(61, 214, 140, 0.18), transparent 45%),
+    radial-gradient(
+      circle at top right,
+      rgba(61, 214, 140, 0.18),
+      transparent 45%
+    ),
     linear-gradient(180deg, #0b241c, var(--bg));
   color: var(--text);
-  font: 13px/1.4 "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  font:
+    13px/1.4 "IBM Plex Sans",
+    "Segoe UI",
+    system-ui,
+    sans-serif;
 }
 
 main {
@@ -287,6 +295,7 @@ h1 {
   border-top: none;
 }
 
+#positions,
 #orders {
   list-style: none;
   margin: 6px 0 0;
@@ -295,6 +304,7 @@ h1 {
   overflow: auto;
 }
 
+#positions li,
 #orders li {
   display: flex;
   flex-direction: column;
@@ -303,11 +313,13 @@ h1 {
   border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 
+#positions li.empty,
 #orders li.empty {
   color: var(--muted);
   border-top: none;
 }
 
+.position-main,
 .order-main,
 .order-meta {
   display: flex;
@@ -316,11 +328,29 @@ h1 {
   gap: 8px;
 }
 
+.position-label {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+  margin-right: 8px;
+}
+
+.position-size,
 .order-side {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.06em;
   color: var(--accent);
+  flex-shrink: 0;
+}
+
+.position-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .order-name {
@@ -331,6 +361,13 @@ h1 {
   text-align: right;
 }
 
+.position-main strong {
+  flex-shrink: 0;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+}
+
 .order-meta {
   color: var(--muted);
   font-size: 12px;
@@ -339,6 +376,14 @@ h1 {
 .order-meta strong {
   color: var(--text);
   font-variant-numeric: tabular-nums;
+}
+
+#positions li[data-tone="positive"] .position-main strong {
+  color: var(--accent);
+}
+
+#positions li[data-tone="negative"] .position-main strong {
+  color: var(--danger);
 }
 
 #orders li[data-tone="positive"] .order-meta strong {

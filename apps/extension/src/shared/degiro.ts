@@ -150,9 +150,10 @@ export async function syncDegiroSession(
     let enrichError: string | null = null;
 
     try {
-      products = await api.fetchProductInfos(
-        account.orders.map((order) => order.productId),
-      );
+      products = await api.fetchProductInfos([
+        ...account.orders.map((order) => order.productId),
+        ...account.positions.map((position) => position.id),
+      ]);
       lastPrices = await api.fetchLastPrices(products);
     } catch (error) {
       enrichError =
@@ -178,12 +179,24 @@ export async function syncDegiroSession(
       lastPrices,
     });
 
+    const positions = account.positions.map((position) => {
+      const product = products.get(String(position.id));
+      return {
+        ...position,
+        productName:
+          position.productName ??
+          product?.name ??
+          product?.symbol ??
+          undefined,
+      };
+    });
+
     return {
       connected: true,
       pageKind,
       url: pageUrl,
       client,
-      positions: account.positions,
+      positions,
       orders,
       indexLosers,
       cashValue: account.cashValue,

@@ -2,9 +2,10 @@ import { useState } from "react";
 import type { DegiroSessionSnapshot } from "@/shared/degiro";
 import { LosersTable } from "./LosersTable";
 import { OrdersList } from "./OrdersList";
+import { PositionsList } from "./PositionsList";
 import type { UiVariant } from "./types";
 
-type TabId = "losers" | "orders";
+type TabId = "positions" | "losers" | "orders";
 
 type ContentTabsProps = {
   snapshot: DegiroSessionSnapshot;
@@ -12,6 +13,11 @@ type ContentTabsProps = {
 };
 
 const TABS: { id: TabId; label: string; caption: string }[] = [
+  {
+    id: "positions",
+    label: "Positions",
+    caption: "Open positions · P&L vs break-even",
+  },
   {
     id: "losers",
     label: "Losers",
@@ -25,14 +31,19 @@ const TABS: { id: TabId; label: string; caption: string }[] = [
 ];
 
 export function ContentTabs({ snapshot, variant }: ContentTabsProps) {
-  const [active, setActive] = useState<TabId>("losers");
+  const [active, setActive] = useState<TabId>("positions");
   const prefix = variant === "panel" ? "degiroid-" : "";
   const tabListClass = `${prefix}tabs`;
   const tabClass = `${prefix}tab`;
   const panelClass = `${prefix}tab-panel`;
   const captionClass =
     variant === "panel" ? "degiroid-section-label" : "section-label";
-  const activeTab = TABS.find((tab) => tab.id === active) ?? TABS[0];
+  const activeCaption =
+    TABS.find((tab) => tab.id === active)?.caption ??
+    "Open positions · P&L vs break-even";
+  const positionsCount = snapshot.positions.filter(
+    (position) => position.size == null || position.size !== 0,
+  ).length;
   const ordersCount = snapshot.orders.length;
 
   return (
@@ -40,10 +51,12 @@ export function ContentTabs({ snapshot, variant }: ContentTabsProps) {
       <div className={tabListClass} role="tablist" aria-label="Degiroid views">
         {TABS.map((tab) => {
           const selected = tab.id === active;
-          const label =
-            tab.id === "orders" && ordersCount > 0
-              ? `${tab.label} (${ordersCount})`
-              : tab.label;
+          let label = tab.label;
+          if (tab.id === "positions" && positionsCount > 0) {
+            label = `${tab.label} (${positionsCount})`;
+          } else if (tab.id === "orders" && ordersCount > 0) {
+            label = `${tab.label} (${ordersCount})`;
+          }
 
           return (
             <button
@@ -63,7 +76,7 @@ export function ContentTabs({ snapshot, variant }: ContentTabsProps) {
         })}
       </div>
 
-      <p className={captionClass}>{activeTab.caption}</p>
+      <p className={captionClass}>{activeCaption}</p>
 
       <div
         role="tabpanel"
@@ -71,7 +84,9 @@ export function ContentTabs({ snapshot, variant }: ContentTabsProps) {
         className={panelClass}
         aria-labelledby={`${prefix}tab-${active}`}
       >
-        {active === "losers" ? (
+        {active === "positions" ? (
+          <PositionsList snapshot={snapshot} variant={variant} />
+        ) : active === "losers" ? (
           <LosersTable snapshot={snapshot} variant={variant} />
         ) : (
           <OrdersList snapshot={snapshot} variant={variant} />

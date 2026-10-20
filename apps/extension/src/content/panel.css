@@ -297,6 +297,7 @@
   font-weight: 650;
 }
 
+#degiroid-positions,
 #degiroid-orders {
   list-style: none;
   margin: 0;
@@ -305,6 +306,7 @@
   overflow: auto;
 }
 
+#degiroid-positions li,
 #degiroid-orders li {
   display: flex;
   flex-direction: column;
@@ -314,10 +316,12 @@
   border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 
+#degiroid-positions li:first-child,
 #degiroid-orders li:first-child {
   border-top: none;
 }
 
+.degiroid-position-main,
 .degiroid-order-main,
 .degiroid-order-meta {
   display: flex;
@@ -326,11 +330,29 @@
   gap: 8px;
 }
 
+.degiroid-position-label {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+  margin-right: 8px;
+}
+
+.degiroid-position-size,
 .degiroid-order-side {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.06em;
   color: #9fe6c5;
+  flex-shrink: 0;
+}
+
+.degiroid-position-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .degiroid-order-name {
@@ -341,6 +363,12 @@
   text-align: right;
 }
 
+.degiroid-position-main strong {
+  flex-shrink: 0;
+  color: #f3fff9;
+  font-variant-numeric: tabular-nums;
+}
+
 .degiroid-order-meta {
   color: #8fbfad;
 }
@@ -348,6 +376,14 @@
 .degiroid-order-meta strong {
   color: #f3fff9;
   font-variant-numeric: tabular-nums;
+}
+
+#degiroid-positions li[data-tone="positive"] .degiroid-position-main strong {
+  color: #3dd68c;
+}
+
+#degiroid-positions li[data-tone="negative"] .degiroid-position-main strong {
+  color: #ff8f8f;
 }
 
 #degiroid-orders li[data-tone="positive"] .degiroid-order-meta strong {
