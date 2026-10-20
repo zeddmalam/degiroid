@@ -10,7 +10,7 @@ export function useLoserRecommendations(snapshot: DegiroSessionSnapshot) {
     StockRecommendation[]
   >([]);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loadingIds, setLoadingIds] = useState<Set<string>>(() => new Set());
   const [ai, setAi] = useState(false);
   const [requested, setRequested] = useState(false);
 
@@ -27,25 +27,45 @@ export function useLoserRecommendations(snapshot: DegiroSessionSnapshot) {
     setError(null);
     setAi(false);
     setRequested(false);
-    setLoading(false);
+    setLoadingIds(new Set());
   }, [loserKey, snapshot.connected]);
 
-  const requestRecommendations = useCallback(() => {
-    if (!snapshot.connected || productIds.length === 0 || loading) return;
+  const requestRecommendation = useCallback(
+    (productId: string) => {
+      if (!snapshot.connected || !productId || loadingIds.has(productId)) {
+        return;
+      }
 
-    setLoading(true);
-    setError(null);
-    setRequested(true);
-    void fetchLoserRecommendations({
-      productIds,
-      force: true,
-    }).then((result) => {
-      setRecommendations(result.recommendations);
-      setAi(result.ai);
-      setError(result.error ?? null);
-      setLoading(false);
-    });
-  }, [snapshot.connected, productIds, loading]);
+      setLoadingIds((prev) => new Set(prev).add(productId));
+      setError(null);
+      setRequested(true);
+      void fetchLoserRecommendations({
+        productIds: [productId],
+        force: true,
+      }).then((result) => {
+        const incoming = result.recommendations.filter(
+          (row) => row.productId === productId,
+        );
+        setRecommendations((prev) => [
+          ...prev.filter((row) => row.productId !== productId),
+          ...incoming,
+        ]);
+        setAi(result.ai);
+        setError(
+          result.error ??
+            (incoming.length === 0
+              ? "No recommendation returned for this stock."
+              : null),
+        );
+        setLoadingIds((prev) => {
+          const next = new Set(prev);
+          next.delete(productId);
+          return next;
+        });
+      });
+    },
+    [snapshot.connected, loadingIds],
+  );
 
   const byProductId = useMemo(() => {
     const map = new Map<string, StockRecommendation>();
@@ -55,11 +75,11 @@ export function useLoserRecommendations(snapshot: DegiroSessionSnapshot) {
 
   return {
     byProductId,
-    loading,
+    loadingIds,
     error,
     ai,
     requested,
-    canRequest: snapshot.connected && productIds.length > 0 && !loading,
-    requestRecommendations,
+    canRequest: snapshot.connected && productIds.length > 0,
+    requestRecommendation,
   };
 }

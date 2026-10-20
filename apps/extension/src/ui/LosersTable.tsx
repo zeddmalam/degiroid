@@ -36,16 +36,35 @@ function recLine(rec: StockRecommendation | undefined): string | null {
   return parts.join(" · ");
 }
 
+function SparklesIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1" />
+    </svg>
+  );
+}
+
 export function LosersTable({ snapshot, variant }: LosersTableProps) {
   const rows = snapshot.indexLosers ?? [];
   const {
     byProductId,
-    loading,
+    loadingIds,
     error,
     ai,
     requested,
     canRequest,
-    requestRecommendations,
+    requestRecommendation,
   } = useLoserRecommendations(snapshot);
   const tableId = variant === "panel" ? "degiroid-losers" : "losers-table";
   const rankClass =
@@ -65,7 +84,7 @@ export function LosersTable({ snapshot, variant }: LosersTableProps) {
   const buttonClass =
     variant === "panel" ? "degiroid-rec-button" : "rec-button";
   const emptyId = variant === "panel" ? "degiroid-empty" : undefined;
-  const showRecColumn = requested || loading;
+  const showStatus = Boolean(error) || (requested && !error);
 
   if (variant === "popup" && !snapshot.connected) {
     return (
@@ -76,6 +95,7 @@ export function LosersTable({ snapshot, variant }: LosersTableProps) {
             <th>Name</th>
             <th>Last</th>
             <th>Day %</th>
+            <th>Rec</th>
           </tr>
         </thead>
         <tbody />
@@ -85,23 +105,17 @@ export function LosersTable({ snapshot, variant }: LosersTableProps) {
 
   return (
     <div className={variant === "panel" ? "degiroid-losers-wrap" : "losers-wrap"}>
-      <div className={toolbarClass}>
-        <button
-          type="button"
-          className={buttonClass}
-          disabled={!canRequest}
-          onClick={requestRecommendations}
-        >
-          {loading ? "Analyzing…" : "Get recommendations"}
-        </button>
-        {error ? <p className={statusClass}>{error}</p> : null}
-        {requested && !loading && !error ? (
-          <p className={statusClass}>
-            {ai ? "AI recommendations" : "Structured recommendations"} · not
-            financial advice
-          </p>
-        ) : null}
-      </div>
+      {showStatus ? (
+        <div className={toolbarClass}>
+          {error ? <p className={statusClass}>{error}</p> : null}
+          {requested && !error ? (
+            <p className={statusClass}>
+              {ai ? "AI recommendations" : "Structured recommendations"} · not
+              financial advice
+            </p>
+          ) : null}
+        </div>
+      ) : null}
       <table id={tableId}>
         <thead>
           <tr>
@@ -109,14 +123,14 @@ export function LosersTable({ snapshot, variant }: LosersTableProps) {
             <th>Name</th>
             <th>Last</th>
             <th>Day %</th>
-            {showRecColumn ? <th>Rec</th> : null}
+            <th>Rec</th>
           </tr>
         </thead>
         <tbody>
           {rows.length === 0 ? (
             <tr>
               <td
-                colSpan={showRecColumn ? 5 : 4}
+                colSpan={5}
                 className={variant === "popup" ? "empty" : undefined}
                 id={emptyId}
               >
@@ -128,6 +142,7 @@ export function LosersTable({ snapshot, variant }: LosersTableProps) {
               const indexes = row.indexes.join(" · ");
               const rec = byProductId.get(row.productId);
               const line = recLine(rec);
+              const loading = loadingIds.has(row.productId);
               return (
                 <tr key={row.productId} data-tone="negative">
                   <td className={rankClass}>{i + 1}</td>
@@ -139,14 +154,22 @@ export function LosersTable({ snapshot, variant }: LosersTableProps) {
                   <td className={changeClass}>
                     {formatChangePct(row.changePct)}
                   </td>
-                  {showRecColumn ? (
-                    <td
-                      className={recClass}
-                      data-action={rec?.action ?? "pending"}
+                  <td
+                    className={recClass}
+                    data-action={rec?.action ?? (loading ? "pending" : undefined)}
+                  >
+                    <button
+                      type="button"
+                      className={buttonClass}
+                      disabled={!canRequest || loading}
+                      onClick={() => requestRecommendation(row.productId)}
+                      aria-label={`Get recommendation for ${loserLabel(row)}`}
+                      title="Get recommendation"
                     >
-                      {line ?? (loading ? "…" : "—")}
-                    </td>
-                  ) : null}
+                      {loading ? "…" : <SparklesIcon />}
+                    </button>
+                    {line ? <span className="rec-line">{line}</span> : null}
+                  </td>
                 </tr>
               );
             })
