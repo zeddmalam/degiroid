@@ -16,7 +16,7 @@ const TABS: { id: TabId; label: string; caption: string }[] = [
   {
     id: "positions",
     label: "Positions",
-    caption: "Open positions · P&L vs break-even",
+    caption: "Open positions · unrealized P/L",
   },
   {
     id: "losers",
@@ -40,7 +40,7 @@ export function ContentTabs({ snapshot, variant }: ContentTabsProps) {
     variant === "panel" ? "degiroid-section-label" : "section-label";
   const activeCaption =
     TABS.find((tab) => tab.id === active)?.caption ??
-    "Open positions · P&L vs break-even";
+    "Open positions · unrealized P/L";
   const positionsCount = snapshot.positions.filter(
     (position) => position.size == null || position.size !== 0,
   ).length;

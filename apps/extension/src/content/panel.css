@@ -326,8 +326,39 @@
 .degiroid-order-meta {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: center;
   gap: 8px;
+}
+
+.degiroid-stop-button {
+  all: unset;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 22px;
+  border: 1px solid rgba(255, 143, 143, 0.4);
+  border-radius: 6px;
+  background: rgba(255, 107, 107, 0.12);
+  color: #ffb0b0;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.degiroid-stop-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.degiroid-action-error {
+  margin: 0 0 6px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: #ff8f8f;
 }
 
 .degiroid-position-label {

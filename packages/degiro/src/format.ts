@@ -1,5 +1,32 @@
-import type { DegiroOrderSide, DegiroSessionSnapshot } from "./types.js";
+import type {
+  DegiroOrderSide,
+  DegiroPosition,
+  DegiroSessionSnapshot,
+} from "./types.js";
 import { DEGIRO_TRADER_ORIGIN } from "./urls.js";
+
+/** Unrealized P/L vs break-even: (price − BEP) × size. */
+export function unrealizedPnl(position: DegiroPosition): {
+  absolute: number | null;
+  pct: number | null;
+  tone: "positive" | "negative" | "neutral";
+} {
+  const { price, breakEvenPrice, size } = position;
+  if (
+    price == null ||
+    breakEvenPrice == null ||
+    size == null ||
+    breakEvenPrice === 0
+  ) {
+    return { absolute: null, pct: null, tone: "neutral" };
+  }
+
+  const absolute = (price - breakEvenPrice) * size;
+  const pct = (price - breakEvenPrice) / breakEvenPrice;
+  const tone =
+    absolute > 0 ? "positive" : absolute < 0 ? "negative" : "neutral";
+  return { absolute, pct, tone };
+}
 
 export function formatMoney(
   value: number | null | undefined,

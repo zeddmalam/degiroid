@@ -1,5 +1,13 @@
-import { formatMoney } from "@/shared/degiro";
+import { useState } from "react";
+import {
+  STOP_LOSS_OFFSET,
+  formatMoney,
+  formatPrice,
+  stopLossPriceFromCurrent,
+  unrealizedPnl,
+} from "@/shared/degiro";
 import type { DegiroPosition, DegiroSessionSnapshot } from "@/shared/degiro";
+import type { ExtensionMessage, ExtensionResponse } from "@/shared/messaging";
 import type { UiVariant } from "./types";
 
 type PositionsListProps = {
@@ -12,27 +20,6 @@ function positionLabel(position: DegiroPosition): string {
     position.productName ??
     (position.id != null ? `Product ${position.id}` : "Position")
   );
-}
-
-function positionPnl(position: DegiroPosition): {
-  absolute: number | null;
-  pct: number | null;
-  tone: "positive" | "negative" | "neutral";
-} {
-  const { price, breakEvenPrice, size } = position;
-  if (
-    price == null ||
-    breakEvenPrice == null ||
-    size == null ||
-    breakEvenPrice === 0
-  ) {
-    return { absolute: null, pct: null, tone: "neutral" };
-  }
-  const absolute = (price - breakEvenPrice) * size;
-  const pct = (price - breakEvenPrice) / breakEvenPrice;
-  const tone =
-    absolute > 0 ? "positive" : absolute < 0 ? "negative" : "neutral";
-  return { absolute, pct, tone };
 }
 
 function formatPnl(
@@ -51,6 +38,41 @@ function formatPnl(
   return `${money} (${pctLabel})`;
 }
 
+function canPlaceStopLoss(position: DegiroPosition): boolean {
+  return (
+    position.price != null &&
+    position.price > STOP_LOSS_OFFSET &&
+    position.size != null &&
+    position.size !== 0 &&
+    stopLossPriceFromCurrent(position.price) > 0
+  );
+}
+
+async function requestPlaceStopLoss(
+  position: DegiroPosition,
+): Promise<ExtensionResponse> {
+  if (position.price == null || position.size == null) {
+    return { ok: false, error: "Missing price or size for this position" };
+  }
+  const stopPrice = stopLossPriceFromCurrent(position.price);
+  const message = {
+    type: "DEGIROID_PLACE_STOP_LOSS",
+    productId: position.id,
+    size: Math.abs(position.size),
+    stopPrice,
+    buySell: position.size < 0 ? "BUY" : "SELL",
+  } satisfies ExtensionMessage;
+
+  const response = (await chrome.runtime.sendMessage(
+    message,
+  )) as ExtensionResponse | undefined;
+
+  if (!response) {
+    return { ok: false, error: "No response from extension" };
+  }
+  return response;
+}
+
 export function PositionsList({ snapshot, variant }: PositionsListProps) {
   const currency = snapshot.client?.currency ?? "EUR";
   const positions = snapshot.positions
@@ -65,6 +87,10 @@ export function PositionsList({ snapshot, variant }: PositionsListProps) {
     variant === "panel" ? "degiroid-position-size" : "position-size";
   const nameClass =
     variant === "panel" ? "degiroid-position-name" : "position-name";
+  const stopClass =
+    variant === "panel" ? "degiroid-stop-button" : "stop-button";
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   if (positions.length === 0) {
     if (variant === "panel") {
@@ -81,23 +107,74 @@ export function PositionsList({ snapshot, variant }: PositionsListProps) {
   }
 
   return (
-    <ul id={listId}>
-      {positions.map((position) => {
-        const { absolute, pct, tone } = positionPnl(position);
-        return (
-          <li key={String(position.id)} data-tone={tone}>
-            <div className={mainClass}>
-              <span className={labelClass}>
-                <span className={nameClass}>{positionLabel(position)}</span>
-                <span className={sizeClass}>
-                  {position.size != null ? `x${position.size}` : "—"}
+    <>
+      {actionError ? (
+        <p
+          className={
+            variant === "panel" ? "degiroid-action-error" : "action-error"
+          }
+        >
+          {actionError}
+        </p>
+      ) : null}
+      <ul id={listId}>
+        {positions.map((position) => {
+          const { absolute, pct, tone } = unrealizedPnl(position);
+          const key = String(position.id);
+          const enabled = canPlaceStopLoss(position) && pendingId == null;
+          const stopPrice =
+            position.price != null
+              ? stopLossPriceFromCurrent(position.price)
+              : null;
+          const title =
+            stopPrice != null
+              ? `Place GTC stop loss at ${formatPrice(stopPrice)} (current − 0.50)`
+              : "Place GTC stop loss";
+
+          return (
+            <li key={key} data-tone={tone}>
+              <div className={mainClass}>
+                <button
+                  type="button"
+                  className={stopClass}
+                  disabled={!enabled}
+                  title={title}
+                  aria-label={`Stop loss for ${positionLabel(position)}`}
+                  onClick={() => {
+                    setActionError(null);
+                    setPendingId(key);
+                    void requestPlaceStopLoss(position)
+                      .then((response) => {
+                        if (!response.ok) {
+                          setActionError(response.error);
+                        }
+                      })
+                      .catch((error: unknown) => {
+                        setActionError(
+                          error instanceof Error
+                            ? error.message
+                            : "Failed to place stop-loss",
+                        );
+                      })
+                      .finally(() => {
+                        setPendingId(null);
+                      });
+                  }}
+                >
+                  {pendingId === key ? "…" : "SL"}
+                </button>
+                <span className={labelClass}>
+                  <span className={nameClass}>{positionLabel(position)}</span>
+                  <span className={sizeClass}>
+                    {position.size != null ? `x${position.size}` : "—"}
+                  </span>
                 </span>
-              </span>
-              <strong>{formatPnl(absolute, pct, currency)}</strong>
-            </div>
-          </li>
-        );
-      })}
-    </ul>
+                <strong>{formatPnl(absolute, pct, currency)}</strong>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </>
   );
 }

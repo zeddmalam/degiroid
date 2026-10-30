@@ -7,7 +7,14 @@ export type ExtensionMessage =
   | { type: "DEGIROID_SYNC_NOW" }
   | { type: "DEGIROID_SNAPSHOT_UPDATED"; snapshot: DegiroSessionSnapshot }
   | { type: "DEGIROID_CONTENT_READY"; url: string }
-  | { type: "DEGIROID_OPEN_TRADER" };
+  | { type: "DEGIROID_OPEN_TRADER" }
+  | {
+      type: "DEGIROID_PLACE_STOP_LOSS";
+      productId: number | string;
+      size: number;
+      stopPrice: number;
+      buySell?: "BUY" | "SELL";
+    };
 
 export type ExtensionResponse =
   | { ok: true; snapshot: DegiroSessionSnapshot }

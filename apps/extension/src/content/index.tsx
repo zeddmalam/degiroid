@@ -1,5 +1,6 @@
 import { createRoot, type Root } from "react-dom/client";
 import {
+  createPageDegiroApi,
   detectPageKind,
   syncDegiroSession,
 } from "@/shared/degiro";
@@ -7,6 +8,7 @@ import type { DegiroSessionSnapshot } from "@/shared/degiro";
 import { startJobWorker } from "@/shared/job-worker";
 import { isExtensionMessage } from "@/shared/messaging";
 import type { ExtensionMessage, ExtensionResponse } from "@/shared/messaging";
+import { getDegiroSessionId } from "@/shared/session";
 import { Panel } from "./Panel";
 import "./panel.css";
 
@@ -85,6 +87,31 @@ async function runSync(): Promise<DegiroSessionSnapshot> {
   return inflightSync;
 }
 
+async function placeStopLossFromMessage(
+  message: Extract<ExtensionMessage, { type: "DEGIROID_PLACE_STOP_LOSS" }>,
+): Promise<DegiroSessionSnapshot> {
+  const sessionId = await getDegiroSessionId();
+  const intAccount = lastSnapshot?.client?.intAccount;
+  if (!sessionId || !intAccount) {
+    throw new Error("No DEGIRO session on this page");
+  }
+
+  const api = createPageDegiroApi({
+    sessionId,
+    intAccount,
+    userToken: lastSnapshot?.client?.id,
+  });
+
+  await api.placeStopLossOrder({
+    productId: message.productId,
+    size: message.size,
+    stopPrice: message.stopPrice,
+    buySell: message.buySell,
+  });
+
+  return runSync();
+}
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (!isExtensionMessage(message)) return false;
 
@@ -101,6 +128,25 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         const response: ExtensionResponse = {
           ok: false,
           error: error instanceof Error ? error.message : "Sync failed",
+        };
+        sendResponse(response);
+      });
+    return true;
+  }
+
+  if (message.type === "DEGIROID_PLACE_STOP_LOSS") {
+    void placeStopLossFromMessage(message)
+      .then((snapshot) => {
+        const response: ExtensionResponse = { ok: true, snapshot };
+        sendResponse(response);
+      })
+      .catch((error: unknown) => {
+        const response: ExtensionResponse = {
+          ok: false,
+          error:
+            error instanceof Error
+              ? error.message
+              : "Failed to place stop-loss order",
         };
         sendResponse(response);
       });

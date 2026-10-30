@@ -13,9 +13,14 @@ export type DegiroPosition = {
   id: number | string;
   positionType?: string;
   size?: number;
+  /** Last/market price (portfolio update, optionally refreshed with live last). */
   price?: number;
+  /** Market value of the position (size × price, + correction when present). */
   value?: number;
   breakEvenPrice?: number;
+  /** Unrealized P/L in account base currency (DEGIRO `plBase`). */
+  plBase?: number;
+  portfolioValueCorrection?: number;
   productName?: string;
 };
 

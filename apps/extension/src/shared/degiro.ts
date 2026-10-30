@@ -16,6 +16,8 @@ export {
   DEGIRO_TRADER_HOST,
   DEGIRO_TRADER_MATCH,
   DEGIRO_TRADER_ORIGIN,
+  DegiroOrderType,
+  DegiroTimeType,
   GERMAN_INDEXES,
   deltaTone,
   detectPageKind,
@@ -24,6 +26,7 @@ export {
   formatDelta,
   formatMoney,
   formatPrice,
+  unrealizedPnl,
   isDegiroHost,
   isTraderHost,
   sessionStatusLabel,
@@ -35,7 +38,67 @@ export {
   type DegiroPosition,
   type DegiroSessionSnapshot,
   type GermanIndexKey,
+  type PlaceOrderResult,
 } from "@repo/degiro";
+
+/** Offset applied when creating a quick GTC stop-loss from an open position. */
+export const STOP_LOSS_OFFSET = 0.5;
+
+/** Max relative drift from portfolio mark when applying a live last. */
+const LIVE_VS_PORTFOLIO_MAX = 0.08;
+/** Portfolio within this of previous close is treated as a stale close mark. */
+const STUCK_ON_CLOSE_PCT = 0.003;
+
+export function stopLossPriceFromCurrent(currentPrice: number): number {
+  return Math.round((currentPrice - STOP_LOSS_OFFSET) * 100) / 100;
+}
+
+/** Refresh portfolio mark with a live last only when the print looks trustworthy. */
+function pickMarkPrice(args: {
+  portfolioPrice: number | undefined;
+  livePrice: number | undefined;
+  previousClose: number | undefined;
+  breakEvenPrice: number | undefined;
+  size: number | undefined;
+}): number | undefined {
+  const { portfolioPrice, livePrice, previousClose, breakEvenPrice, size } =
+    args;
+  if (livePrice == null || !(livePrice > 0)) return portfolioPrice;
+  if (portfolioPrice == null || !(portfolioPrice > 0)) return livePrice;
+
+  const drift = Math.abs(livePrice - portfolioPrice) / portfolioPrice;
+  const stuckOnClose =
+    previousClose != null &&
+    previousClose > 0 &&
+    Math.abs(portfolioPrice - previousClose) / previousClose <=
+      STUCK_ON_CLOSE_PCT;
+
+  // Small drift: always prefer fresher live.
+  if (drift <= LIVE_VS_PORTFOLIO_MAX) return livePrice;
+
+  // Larger drift only if portfolio is still the prior close (Lufthansa case).
+  if (!stuckOnClose) return portfolioPrice;
+  if (drift > 0.2) return portfolioPrice;
+
+  if (
+    breakEvenPrice != null &&
+    breakEvenPrice !== 0 &&
+    size != null &&
+    size !== 0
+  ) {
+    const pnlPortfolio = (portfolioPrice - breakEvenPrice) * size;
+    const pnlLive = (livePrice - breakEvenPrice) * size;
+    if (
+      pnlPortfolio !== 0 &&
+      Math.sign(pnlPortfolio) !== Math.sign(pnlLive) &&
+      pnlLive !== 0
+    ) {
+      return portfolioPrice;
+    }
+  }
+
+  return livePrice;
+}
 
 const SESSION_RETRY_MS = 1_000;
 const SESSION_WAIT_MS = 45_000;
@@ -146,6 +209,7 @@ export async function syncDegiroSession(
 
     let products = new Map<string, ProductInfo>();
     let lastPrices = new Map<string, number>();
+    let previousCloses = new Map<string, number>();
     let indexLosers: DegiroIndexLoser[] = [];
     let enrichError: string | null = null;
 
@@ -154,7 +218,9 @@ export async function syncDegiroSession(
         ...account.orders.map((order) => order.productId),
         ...account.positions.map((position) => position.id),
       ]);
-      lastPrices = await api.fetchLastPrices(products);
+      const marks = await api.fetchLastPrices(products);
+      lastPrices = marks.last;
+      previousCloses = marks.previousClose;
     } catch (error) {
       enrichError =
         error instanceof Error
@@ -181,8 +247,29 @@ export async function syncDegiroSession(
 
     const positions = account.positions.map((position) => {
       const product = products.get(String(position.id));
+      const key = String(position.id);
+      const rawLive = lastPrices.get(key);
+      const livePrice =
+        rawLive != null && Number.isFinite(rawLive) && rawLive > 0
+          ? rawLive
+          : undefined;
+      const price = pickMarkPrice({
+        portfolioPrice: position.price,
+        livePrice,
+        previousClose: previousCloses.get(key),
+        breakEvenPrice: position.breakEvenPrice,
+        size: position.size,
+      });
+      const size = position.size;
+      const correction = position.portfolioValueCorrection ?? 0;
+      const value =
+        price != null && size != null
+          ? price * size + correction
+          : position.value;
       return {
         ...position,
+        price,
+        value,
         productName:
           position.productName ??
           product?.name ??

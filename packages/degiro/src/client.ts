@@ -24,7 +24,7 @@ import {
   withSessionId,
   withTradingJsessionId,
 } from "./urls.js";
-import { asNumber, asString } from "./utils.js";
+import { asCurrencyAmount, asNumber, asString } from "./utils.js";
 
 export const GERMAN_INDEXES: ReadonlyArray<{
   key: GermanIndexKey;
@@ -48,6 +48,35 @@ const ORDER_TYPE_LABELS: Record<number, string> = {
   3: "STOP_LOSS",
 };
 
+/** DEGIRO orderType ids */
+export const DegiroOrderType = {
+  LIMIT: 0,
+  STOP_LIMIT: 1,
+  MARKET: 2,
+  STOP_LOSS: 3,
+} as const;
+
+/** DEGIRO timeType ids */
+export const DegiroTimeType = {
+  DAY: 1,
+  GTC: 3,
+} as const;
+
+export type PlaceOrderRequest = {
+  buySell: DegiroOrderSide;
+  orderType: number;
+  productId: number;
+  size: number;
+  timeType: number;
+  price?: number;
+  stopPrice?: number;
+};
+
+export type PlaceOrderResult = {
+  confirmationId: string;
+  orderId: string;
+};
+
 type NamedValue = { name?: string; value?: unknown };
 type UpdateRow = {
   id?: number | string;
@@ -56,6 +85,8 @@ type UpdateRow = {
   price?: number;
   value?: number | NamedValue[];
   breakEvenPrice?: number;
+  plBase?: number | Record<string, number> | NamedValue[];
+  portfolioValueCorrection?: number;
   name?: string;
   product?: string;
   productId?: number | string;
@@ -237,17 +268,26 @@ export function createDegiroApi(options: DegiroApiOptions) {
 
   async function fetchLastPrices(
     productsById: Map<string, ProductInfo>,
-  ): Promise<Map<string, number>> {
+  ): Promise<{
+    last: Map<string, number>;
+    previousClose: Map<string, number>;
+  }> {
     await ensureSessionMeta();
-    const prices = new Map<string, number>();
-    if (!userToken || productsById.size === 0) return prices;
+    const last = new Map<string, number>();
+    const previousClose = new Map<string, number>();
+    if (!userToken || productsById.size === 0) {
+      return { last, previousClose };
+    }
     const entries = [...productsById.entries()];
     for (let i = 0; i < entries.length; i += CHART_SERIES_BATCH) {
       const batch = entries.slice(i, i + CHART_SERIES_BATCH);
       const batchPrices = await fetchLastPricesBatch(batch, "P1D", "PT1M");
-      for (const [id, price] of batchPrices.last) prices.set(id, price);
+      for (const [id, price] of batchPrices.last) last.set(id, price);
+      for (const [id, price] of batchPrices.previousClose) {
+        previousClose.set(id, price);
+      }
     }
-    return prices;
+    return { last, previousClose };
   }
 
   function resolveProductIdFromChart(
@@ -343,7 +383,8 @@ export function createDegiroApi(options: DegiroApiOptions) {
           continue;
         }
 
-        // Time series: [[t, px], ...] or similar
+        // Time series: [[t, px], ...] — only attach when series id resolves.
+        // Never fall back to "first product without series" (mis-attributes prints).
         const points: PricePoint[] = [];
         for (const row of data) {
           if (!Array.isArray(row) || row.length < 2) continue;
@@ -357,14 +398,13 @@ export function createDegiroApi(options: DegiroApiOptions) {
         }
         if (points.length === 0) continue;
 
-        const productId =
-          resolveProductIdFromChart(vwdToProduct, { seriesId }) ??
-          [...entries].find(([id]) => !series.has(id))?.[0];
+        const productId = resolveProductIdFromChart(vwdToProduct, { seriesId });
         if (!productId) continue;
 
         series.set(productId, points);
         const end = points[points.length - 1];
-        if (end) last.set(productId, end.price);
+        // Prefer object-series lastPrice when already set; do not overwrite.
+        if (end && !last.has(productId)) last.set(productId, end.price);
       }
     } catch {
       /* charting best-effort */
@@ -379,9 +419,12 @@ export function createDegiroApi(options: DegiroApiOptions) {
     if (!product) {
       throw new Error(`Product ${productId} not found`);
     }
-    const lastPrices = await fetchLastPrices(products);
-    const closePrice = asNumber(product.closePrice) ?? null;
-    const lastPrice = lastPrices.get(String(productId)) ?? closePrice;
+    const marks = await fetchLastPrices(products);
+    const closePrice =
+      marks.previousClose.get(String(productId)) ??
+      asNumber(product.closePrice) ??
+      null;
+    const lastPrice = marks.last.get(String(productId)) ?? closePrice;
     const change =
       lastPrice != null && closePrice != null ? lastPrice - closePrice : null;
     const changePct =
@@ -619,6 +662,146 @@ export function createDegiroApi(options: DegiroApiOptions) {
     return structuredAnalyze({ quote, history });
   }
 
+  function orderQuery() {
+    return { intAccount: String(intAccount), sessionId };
+  }
+
+  function orderBody(order: PlaceOrderRequest): Record<string, string | number> {
+    const body: Record<string, string | number> = {
+      buySell: order.buySell,
+      orderType: order.orderType,
+      productId: order.productId,
+      size: order.size,
+      timeType: order.timeType,
+    };
+    if (order.price != null) body.price = order.price;
+    if (order.stopPrice != null) body.stopPrice = order.stopPrice;
+    return body;
+  }
+
+  async function readOrderError(response: {
+    status: number;
+    text: () => Promise<string>;
+    json: () => Promise<unknown>;
+  }): Promise<string> {
+    try {
+      const json = (await response.json()) as {
+        errors?: Array<{ text?: string; message?: string }>;
+        statusText?: string;
+        message?: string;
+      };
+      const fromErrors = json.errors
+        ?.map((item) => item.text ?? item.message)
+        .filter(Boolean)
+        .join("; ");
+      if (fromErrors) return fromErrors;
+      if (json.statusText) return json.statusText;
+      if (json.message) return json.message;
+    } catch {
+      /* fall through */
+    }
+    try {
+      const text = (await response.text()).trim();
+      if (text) return text.slice(0, 240);
+    } catch {
+      /* fall through */
+    }
+    return `DEGIRO order request failed (${response.status})`;
+  }
+
+  async function checkOrder(
+    order: PlaceOrderRequest,
+  ): Promise<{ confirmationId: string }> {
+    const url = withTradingJsessionId(
+      `${DEGIRO_TRADER_ORIGIN}/trading/secure/v5/checkOrder`,
+      sessionId,
+      orderQuery(),
+    );
+    const response = await degiroFetch(url, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(orderBody(order)),
+    });
+    if (!response.ok) {
+      throw new Error(await readOrderError(response));
+    }
+    const json = (await response.json()) as {
+      data?: { confirmationId?: string };
+    };
+    const confirmationId = asString(json.data?.confirmationId);
+    if (!confirmationId) {
+      throw new Error("DEGIRO checkOrder returned no confirmationId");
+    }
+    return { confirmationId };
+  }
+
+  async function confirmOrder(
+    confirmationId: string,
+    order: PlaceOrderRequest,
+  ): Promise<{ orderId: string }> {
+    const url = withTradingJsessionId(
+      `${DEGIRO_TRADER_ORIGIN}/trading/secure/v5/order/${confirmationId}`,
+      sessionId,
+      orderQuery(),
+    );
+    const response = await degiroFetch(url, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(orderBody(order)),
+    });
+    if (!response.ok) {
+      throw new Error(await readOrderError(response));
+    }
+    const json = (await response.json()) as {
+      data?: { orderId?: string };
+    };
+    const orderId = asString(json.data?.orderId);
+    if (!orderId) {
+      throw new Error("DEGIRO confirmOrder returned no orderId");
+    }
+    return { orderId };
+  }
+
+  async function placeOrder(order: PlaceOrderRequest): Promise<PlaceOrderResult> {
+    const { confirmationId } = await checkOrder(order);
+    const { orderId } = await confirmOrder(confirmationId, order);
+    return { confirmationId, orderId };
+  }
+
+  /** Place a GTC stop-loss order (orderType STOP_LOSS, timeType GTC). */
+  async function placeStopLossOrder(input: {
+    productId: number | string;
+    size: number;
+    stopPrice: number;
+    buySell?: DegiroOrderSide;
+  }): Promise<PlaceOrderResult> {
+    const productId = Number(input.productId);
+    if (!Number.isFinite(productId)) {
+      throw new Error("Invalid productId for stop-loss order");
+    }
+    const size = Math.abs(input.size);
+    if (!(size > 0)) {
+      throw new Error("Stop-loss size must be greater than zero");
+    }
+    if (!(input.stopPrice > 0)) {
+      throw new Error("Stop-loss price must be greater than zero");
+    }
+    return placeOrder({
+      buySell: input.buySell ?? "SELL",
+      orderType: DegiroOrderType.STOP_LOSS,
+      productId,
+      size,
+      stopPrice: roundPrice(input.stopPrice),
+      timeType: DegiroTimeType.GTC,
+    });
+  }
+
   return {
     fetchClient,
     fetchAccountUpdate,
@@ -630,7 +813,15 @@ export function createDegiroApi(options: DegiroApiOptions) {
     fetchGermanIndexLosers,
     enrichOrders,
     structuredAnalyzeProduct,
+    checkOrder,
+    confirmOrder,
+    placeOrder,
+    placeStopLossOrder,
   };
+}
+
+function roundPrice(value: number): number {
+  return Math.round(value * 100) / 100;
 }
 
 export type DegiroApi = ReturnType<typeof createDegiroApi>;
@@ -667,19 +858,31 @@ function parseAccountUpdate(json: {
   for (const raw of portfolioRows) {
     const row = flattenUpdateRow(raw);
     const positionType = asString(row.positionType);
-    const value = asNumber(row.value) ?? 0;
+    const rawValue = asNumber(row.value) ?? 0;
+    const correction = asNumber(row.portfolioValueCorrection) ?? 0;
+    const contributedValue = rawValue + correction;
     if (positionType === "CASH") {
-      cashValue = (cashValue ?? 0) + value;
+      cashValue = (cashValue ?? 0) + contributedValue;
       continue;
     }
-    portfolioValue += value;
+    portfolioValue += contributedValue;
+    const size = asNumber(row.size);
+    const price = asNumber(row.price);
     positions.push({
       id: (row.id as number | string | undefined) ?? positions.length,
       positionType,
-      size: asNumber(row.size),
-      price: asNumber(row.price),
-      value: asNumber(row.value),
+      size,
+      price,
+      value:
+        asNumber(row.value) != null
+          ? contributedValue
+          : price != null && size != null
+            ? price * size + correction
+            : undefined,
       breakEvenPrice: asNumber(row.breakEvenPrice),
+      plBase: asCurrencyAmount(row.plBase),
+      portfolioValueCorrection:
+        correction !== 0 ? correction : undefined,
       productName: asString(row.name) ?? asString(row.product),
     });
   }
